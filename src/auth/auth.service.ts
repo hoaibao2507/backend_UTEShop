@@ -107,4 +107,44 @@ export class AuthService {
             access_token: newAccessToken,
         };
     }
+    async forgotPassword(email: string): Promise<string> {
+        const user = await this.usersRepository.findOne({ where: { email } });
+        if (!user) {
+            throw new Error('Email không tồn tại');
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = Date.now() + 5 * 60 * 1000; // 5 phút
+
+        user.otpCode = otp;
+        user.otpExpiry = expiry;
+        await this.usersRepository.save(user);
+
+        await this.sendOtpEmail(email, otp);
+
+        return 'OTP đã được gửi tới email của bạn';
+    }
+
+    async resetPassword(email: string, otp: string, newPassword: string): Promise<string> {
+        const user = await this.usersRepository.findOne({ where: { email } });
+        if (!user) {
+            throw new Error('Email không tồn tại');
+        }
+
+        if (user.otpCode !== otp || Date.now() > user.otpExpiry) {
+            throw new Error('OTP không hợp lệ hoặc đã hết hạn');
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+
+        // reset lại OTP để không dùng lại được
+        user.otpCode = "";
+        user.otpExpiry = 0;
+
+        await this.usersRepository.save(user);
+
+        return 'Mật khẩu đã được đặt lại thành công';
+    }
+
 }
