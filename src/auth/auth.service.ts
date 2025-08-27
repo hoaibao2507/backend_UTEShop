@@ -16,7 +16,7 @@ export class AuthService {
         private configService: ConfigService,
     ) {}
 
-    async register(name: string, email: string, password: string): Promise<User> {
+    async register(name: string, username: string, email: string, password: string): Promise<User> {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString(); // mã OTP 6 chữ số
@@ -24,6 +24,7 @@ export class AuthService {
 
         const user = this.usersRepository.create({
         name,
+        username,
         email,
         password: hashedPassword,
         otpCode: otp,
@@ -55,8 +56,8 @@ export class AuthService {
         });
     }
 
-    async validateUser(email: string, password: string): Promise<any> {
-        const user = await this.usersRepository.findOne({ where: { email } });
+    async validateUser(username: string, password: string): Promise<any> {
+        const user = await this.usersRepository.findOne({ where: { username } });
         if (user && user.isVerified) {
         const isMatch = await bcrypt.compare(password, user.password);
         if (isMatch) {
@@ -70,15 +71,11 @@ export class AuthService {
     async login(user: any) {
         const payload = { email: user.email, sub: user.id };
 
-        const accessToken = this.jwtService.sign(payload, {
-            secret: this.configService.get<string>('JWT_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
-        });
+        // Sử dụng JWT service đã được cấu hình trong module
+        const accessToken = this.jwtService.sign(payload);
 
-        const refreshToken = this.jwtService.sign(payload, {
-            secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
-        });
+        // Tạo refresh token với thời gian dài hơn
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
         // lưu refresh token vào DB
         await this.usersRepository.update(user.id, { refreshToken });
@@ -107,7 +104,7 @@ export class AuthService {
             access_token: newAccessToken,
         };
     }
-    async forgotPassword(email: string): Promise<string> {
+    async forgotPassword(email: string): Promise<{ message: string }> {
         const user = await this.usersRepository.findOne({ where: { email } });
         if (!user) {
             throw new Error('Email không tồn tại');
@@ -122,10 +119,10 @@ export class AuthService {
 
         await this.sendOtpEmail(email, otp);
 
-        return 'OTP đã được gửi tới email của bạn';
+        return { message: 'OTP đã được gửi tới email của bạn' };
     }
 
-    async resetPassword(email: string, otp: string, newPassword: string): Promise<string> {
+    async resetPassword(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
         const user = await this.usersRepository.findOne({ where: { email } });
         if (!user) {
             throw new Error('Email không tồn tại');
@@ -144,7 +141,7 @@ export class AuthService {
 
         await this.usersRepository.save(user);
 
-        return 'Mật khẩu đã được đặt lại thành công';
+        return { message: 'Mật khẩu đã được đặt lại thành công' };
     }
 
 }

@@ -2,7 +2,18 @@ import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
 import { User } from 'src/users/users.entity';
 import { AuthService } from './auth.service';
 import { UsersService } from 'src/users/users.service';
-import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiTags, ApiResponse } from '@nestjs/swagger';
+import { 
+    RegisterDto, 
+    LoginDto, 
+    VerifyOtpDto, 
+    RefreshTokenDto, 
+    ForgotPasswordDto, 
+    ResetPasswordDto,
+    LoginResponseDto,
+    MessageResponseDto,
+    RefreshTokenResponseDto
+} from 'src/dto/auth.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -12,57 +23,66 @@ export class AuthController {
     ) {}
 
     @Post('register')
-    @ApiBody({
-        schema: {
-            type: 'object',
-            properties: {
-                name: { type: 'string', example: 'John Doe' },
-                email: { type: 'string', example: 'abc@gmail.com'},
-                password: { type: 'string', example: 'password123' },
-            }
-        }
-    }
-    )
-    async register(
-        @Body() body: any,
-    ): Promise<User> {
-        return this.authService.register(body.name, body.email, body.password);
+    @ApiBody({ type: RegisterDto })
+    @ApiResponse({ status: 201, description: 'User registered successfully', type: User })
+    @ApiResponse({ status: 400, description: 'Bad request' })
+    async register(@Body() registerDto: RegisterDto): Promise<User> {
+        return this.authService.register(
+            registerDto.name, 
+            registerDto.username, 
+            registerDto.email, 
+            registerDto.password
+        );
     }
 
     @Post('verify-otp')
-    async verifyOtp(
-        @Body() body: { email: string; otp: string },
-    ): Promise<{ message: string }> {
-        return this.usersService.verifyOtp(body.email, body.otp);
+    @ApiBody({ type: VerifyOtpDto })
+    @ApiResponse({ status: 200, description: 'OTP verified successfully', type: MessageResponseDto })
+    @ApiResponse({ status: 400, description: 'Bad request' })
+    async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto): Promise<MessageResponseDto> {
+        if (!verifyOtpDto.email || !verifyOtpDto.otp) {
+            throw new UnauthorizedException('Email và OTP là bắt buộc');
+        }
+        return this.usersService.verifyOtp(verifyOtpDto.email, verifyOtpDto.otp);
     }
 
     @Post('login')
-    async login(
-        @Body() body: { email: string; password: string },
-    ): Promise<{ access_token: string; refresh_token: string }> {
-        const user = await this.authService.validateUser(body.email, body.password);
+    @ApiBody({ type: LoginDto })
+    @ApiResponse({ status: 200, description: 'Login successful', type: LoginResponseDto })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async login(@Body() loginDto: LoginDto): Promise<LoginResponseDto> {
+        const user = await this.authService.validateUser(loginDto.username, loginDto.password);
         if (!user) {
-            throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
+            throw new UnauthorizedException('Username hoặc mật khẩu không đúng');
         }
         return this.authService.login(user);
     }
     
     @Post('refresh')
-    async refresh(@Body() body: { userId: number; refreshToken: string }) {
-        return this.authService.refreshToken(body.userId, body.refreshToken);
+    @ApiBody({ type: RefreshTokenDto })
+    @ApiResponse({ status: 200, description: 'Token refreshed successfully', type: RefreshTokenResponseDto })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+        return this.authService.refreshToken(refreshTokenDto.userId, refreshTokenDto.refreshToken);
     }
 
     @Post('forgot-password')
-    async forgotPassword(@Body('email') email: string) {
-        return this.authService.forgotPassword(email);
+    @ApiBody({ type: ForgotPasswordDto })
+    @ApiResponse({ status: 200, description: 'OTP sent successfully', type: MessageResponseDto })
+    @ApiResponse({ status: 400, description: 'Bad request' })
+    async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<MessageResponseDto> {
+        return this.authService.forgotPassword(forgotPasswordDto.email);
     }
 
     @Post('reset-password')
-    async resetPassword(
-        @Body('email') email: string,
-        @Body('otp') otp: string,
-        @Body('newPassword') newPassword: string,
-    ) {
-        return this.authService.resetPassword(email, otp, newPassword);
+    @ApiBody({ type: ResetPasswordDto })
+    @ApiResponse({ status: 200, description: 'Password reset successfully', type: MessageResponseDto })
+    @ApiResponse({ status: 400, description: 'Bad request' })
+    async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<MessageResponseDto> {
+        return this.authService.resetPassword(
+            resetPasswordDto.email, 
+            resetPasswordDto.otp, 
+            resetPasswordDto.newPassword
+        );
     }
 }

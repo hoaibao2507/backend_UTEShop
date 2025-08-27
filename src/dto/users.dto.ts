@@ -4,6 +4,9 @@ export class UserDto {
     @ApiProperty({example: 'string'})
     name: string;
 
+    @ApiProperty({example: 'johndoe'})
+    username: string;
+
     @ApiProperty({example: 'test@gmail.com'})
     email: string;
 
