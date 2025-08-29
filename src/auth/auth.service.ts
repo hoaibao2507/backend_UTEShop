@@ -72,12 +72,12 @@ export class AuthService {
 
         const accessToken = this.jwtService.sign(payload, {
             secret: this.configService.get<string>('JWT_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
+            expiresIn: this.configService.get<string>('JWT_EXPIRES_IN'),
         });
 
         const refreshToken = this.jwtService.sign(payload, {
             secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
+            expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
         });
 
         // lưu refresh token vào DB
