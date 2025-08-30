@@ -21,7 +21,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         password: config.get<string>('DB_PASS'),
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: false, // Tắt synchronize để tránh lỗi schema
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
       }),
     }),
     UsersModule,
