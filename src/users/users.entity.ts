@@ -1,29 +1,81 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+
+export enum Gender {
+    MALE = 'male',
+    FEMALE = 'female',
+    OTHER = 'other'
+}
 
 @Entity()
 export class User {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
-    name: string;
+    @Column({ length: 50 })
+    firstName: string;
+
+    @Column({ length: 50 })
+    lastName: string;
 
     @Column({ unique: true })
     email: string;
 
-    @Column()
-    password: string;
+    @Column({ length: 20, unique: true, nullable: true })
+    phone: string;
+
+    @Column({ length: 255, nullable: true })
+    address: string;
+
+    @Column({ length: 100, nullable: true })
+    city: string;
+
+    @Column({
+        type: 'enum',
+        enum: Gender,
+        nullable: true
+    })
+    gender: Gender;
+
+    @Column({ type: 'date', nullable: true })
+    dateOfBirth: Date;
 
     @Column({ nullable: true })
-    otpCode: string;
-
-    @Column({ type: 'bigint', nullable: true })
-    otpExpiry: number; // thời gian hết hạn OTP (timestamp)
+    password: string;
 
     @Column({ default: false })
     isVerified: boolean;
 
     @Column({ nullable: true })
+    otpCode: string;
+
+    @Column({ type: 'bigint', nullable: true })
+    otpExpiry: number;
+
+    @Column({ nullable: true })
     refreshToken: string;
 
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+
+    // Virtual properties (not stored in database)
+    get fullName(): string {
+        return `${this.firstName} ${this.lastName}`.trim();
+    }
+
+    get age(): number | null {
+        if (!this.dateOfBirth) return null;
+        const today = new Date();
+        const birthDate = new Date(this.dateOfBirth);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        
+        return age;
+    }
 }

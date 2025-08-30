@@ -16,19 +16,39 @@ export class AuthService {
         private configService: ConfigService,
     ) {}
 
-    async register(name: string, email: string, password: string): Promise<User> {
+    async register(firstName: string, lastName: string, email: string, password: string, phone?: string, address?: string, city?: string, gender?: string, dateOfBirth?: string): Promise<User> {
+        // Kiểm tra email đã tồn tại chưa
+        const existingUser = await this.usersRepository.findOne({ where: { email } });
+        if (existingUser) {
+            throw new Error('Email đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.');
+        }
+
+        // Kiểm tra phone đã tồn tại chưa (nếu có)
+        if (phone) {
+            const existingPhone = await this.usersRepository.findOne({ where: { phone } });
+            if (existingPhone) {
+                throw new Error('Số điện thoại đã được sử dụng. Vui lòng chọn số khác.');
+            }
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString(); // mã OTP 6 chữ số
         const expiry = Date.now() + 5 * 60 * 1000; // OTP hết hạn sau 5 phút
 
         const user = this.usersRepository.create({
-        name,
-        email,
-        password: hashedPassword,
-        otpCode: otp,
-        otpExpiry: expiry,
-        isVerified: false,
+            firstName,
+            lastName,
+            email,
+            password: hashedPassword,
+            phone,
+            address,
+            city,
+            gender: gender as any,
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+            otpCode: otp,
+            otpExpiry: expiry,
+            isVerified: false,
         });
 
         const savedUser = await this.usersRepository.save(user);
@@ -100,7 +120,7 @@ export class AuthService {
 
         const newAccessToken = this.jwtService.sign(payload, {
             secret: this.configService.get<string>('JWT_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
+            expiresIn: this.configService.get<string>('JWT_EXPIRES_IN'),
         });
 
         return {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './users.entity';
 import { Repository } from 'typeorm';
+import { CreateUserDto, UpdateUserDto } from 'src/dto/users.dto';
 
 @Injectable()
 export class UsersService {
@@ -14,37 +15,52 @@ export class UsersService {
         return await this.usersRepository.find();
     }
 
-    async create(user: Partial<User>): Promise<User> {
-        const newUser = this.usersRepository.create(user);
+    async create(userData: CreateUserDto): Promise<User> {
+        // Kiểm tra các trường bắt buộc
+        if (!userData.email || !userData.firstName || !userData.lastName || !userData.password) {
+            throw new Error('Email, firstName, lastName và password là bắt buộc');
+        }
+        
+        const newUser = this.usersRepository.create(userData);
         return await this.usersRepository.save(newUser);
     }
 
+    async update(id: number, userData: UpdateUserDto): Promise<User> {
+        const existingUser = await this.usersRepository.findOne({ where: { id } });
+        if (!existingUser) {
+            throw new Error('User không tồn tại');
+        }
+
+        // Cập nhật các trường được cung cấp
+        Object.assign(existingUser, userData);
+        return await this.usersRepository.save(existingUser);
+    }
+
     async verifyOtp(email: string, otp: string): Promise<{ message: string }> {
-    const user = await this.usersRepository.findOne({ where: { email } });
+        const user = await this.usersRepository.findOne({ where: { email } });
 
-    if (!user) {
-        return { message: 'Email không tồn tại' };
+        if (!user) {
+            return { message: 'Email không tồn tại' };
+        }
+
+        if (user.isVerified) {
+            return { message: 'Tài khoản đã được xác thực' };
+        }
+
+        if (user.otpCode !== otp) {
+            return { message: 'Mã OTP không đúng' };
+        }
+
+        if (Date.now() > user.otpExpiry) {
+            return { message: 'Mã OTP đã hết hạn' };
+        }
+
+        // Xác thực thành công
+        user.isVerified = true;
+        user.otpCode = "";
+        user.otpExpiry = 0;
+        await this.usersRepository.save(user);
+
+        return { message: 'Xác thực thành công' };
     }
-
-    if (user.isVerified) {
-        return { message: 'Tài khoản đã được xác thực' };
-    }
-
-    if (user.otpCode !== otp) {
-        return { message: 'Mã OTP không đúng' };
-    }
-
-    if (Date.now() > user.otpExpiry) {
-        return { message: 'Mã OTP đã hết hạn' };
-    }
-
-    // Xác thực thành công
-    user.isVerified = true;
-    user.otpCode = "";
-    user.otpExpiry = 0;
-    await this.usersRepository.save(user);
-
-    return { message: 'Xác thực thành công' };
-    }
-
 }
