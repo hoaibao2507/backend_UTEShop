@@ -6,6 +6,15 @@ import { UsersModule } from './users/users.module';
 import { AuthController } from './auth/auth.controller';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CategoryModule } from './category/category.module';
+import { ProductModule } from './product/product.module';
+import { CartModule } from './cart/cart.module';
+import { CartItemModule } from './cart-item/cart-item.module';
+import { OrderModule } from './order/order.module';
+import { OrderDetailModule } from './order-detail/order-detail.module';
+import { ProductReviewModule } from './product-review/product-review.module';
+import { ProductImageModule } from './product-image/product-image.module';
+import { ProductViewModule } from './product-view/product-view.module';
 
 @Module({
   imports: [
@@ -27,6 +36,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     }),
     UsersModule,
     AuthModule,
+    CategoryModule,
+    ProductModule,
+    CartModule,
+    CartItemModule,
+    OrderModule,
+    OrderDetailModule,
+    ProductReviewModule,
+    ProductImageModule,
+    ProductViewModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 
 export enum Gender {
     MALE = 'male',
@@ -59,6 +59,16 @@ export class User {
 
     @UpdateDateColumn()
     updatedAt: Date;
+
+    // Relations (using string references to avoid circular imports)
+    @OneToMany('Order', 'user')
+    orders: any[];
+
+    @OneToMany('Cart', 'user')
+    carts: any[];
+
+    @OneToMany('ProductReview', 'user')
+    reviews: any[];
 
     // Virtual properties (not stored in database)
     get fullName(): string {
