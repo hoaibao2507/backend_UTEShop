@@ -11,10 +11,13 @@ export class UsersController {
     constructor(private usersService: UsersService) {}
 
     @Get('getAll')
-    @ApiOperation({ summary: 'Lấy danh sách tất cả users (Admin only)' })
+    @ApiOperation({ 
+        summary: 'Lấy danh sách tất cả người dùng', 
+        description: 'Lấy danh sách tất cả người dùng trong hệ thống (chỉ dành cho admin)' 
+    })
     @ApiResponse({ 
         status: 200, 
-        description: 'Danh sách tất cả users',
+        description: 'Danh sách tất cả người dùng được trả về thành công',
         schema: {
             type: 'array',
             items: {
@@ -129,7 +132,13 @@ export class UsersController {
     @UseGuards(AuthGuard('jwt'))
     @Post('create')
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Tạo user mới (Admin only)' })
+    @ApiOperation({ 
+        summary: 'Tạo người dùng mới', 
+        description: 'Tạo một người dùng mới trong hệ thống (chỉ dành cho admin) (yêu cầu xác thực)' 
+    })
+    @ApiResponse({ status: 201, description: 'Người dùng được tạo thành công' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
     async create(@Body() user: CreateUserDto): Promise<User> {
         return this.usersService.create(user);
     }
@@ -137,7 +146,14 @@ export class UsersController {
     @UseGuards(AuthGuard('jwt'))
     @Post('update/:id')
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Cập nhật thông tin user' })
+    @ApiOperation({ 
+        summary: 'Cập nhật thông tin người dùng', 
+        description: 'Cập nhật thông tin của một người dùng theo ID (yêu cầu xác thực)' 
+    })
+    @ApiResponse({ status: 200, description: 'Thông tin người dùng được cập nhật thành công' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
     async update(@Param('id', ParseIntPipe) id: number, @Body() user: UpdateUserDto): Promise<User> {
         return this.usersService.update(id, user);
     }
