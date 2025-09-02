@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ProductService } from './product.service';
-import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/product.dto';
+import { CreateProductDto, UpdateProductDto, ProductQueryDto, LatestProductsQueryDto, BestSellingProductsQueryDto, MostViewedProductsQueryDto, TopDiscountProductsQueryDto, HomepageProductQueryDto } from './dto/product.dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('products')
 @Controller('products')
@@ -31,6 +31,141 @@ export class ProductController {
     @ApiResponse({ status: 200, description: 'Danh sách sản phẩm nổi bật được trả về thành công' })
     async getFeaturedProducts(@Query('limit') limit: number = 10) {
         return this.productService.getFeaturedProducts(limit);
+    }
+
+    @Get('latest')
+    @ApiOperation({ 
+        summary: 'Lấy sản phẩm mới nhất', 
+        description: 'Lấy danh sách sản phẩm mới nhất cho trang chủ (có thể tùy chỉnh số lượng)' 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm cần lấy (mặc định: 10)',
+        example: 10
+    })
+    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm mới nhất được trả về thành công' })
+    async getLatestProducts(@Query() query: LatestProductsQueryDto) {
+        return this.productService.getLatestProducts(query.limit);
+    }
+
+    @Get('best-selling')
+    @ApiOperation({ 
+        summary: 'Lấy sản phẩm bán chạy nhất', 
+        description: 'Lấy danh sách sản phẩm bán chạy nhất cho trang chủ (có thể tùy chỉnh số lượng)' 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm cần lấy (mặc định: 10)',
+        example: 10
+    })
+    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm bán chạy nhất được trả về thành công' })
+    async getBestSellingProducts(@Query() query: BestSellingProductsQueryDto) {
+        return this.productService.getBestSellingProducts(query.limit);
+    }
+
+    @Get('most-viewed')
+    @ApiOperation({ 
+        summary: 'Lấy sản phẩm được xem nhiều nhất', 
+        description: 'Lấy danh sách sản phẩm được xem nhiều nhất cho trang chủ (có thể tùy chỉnh số lượng)' 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm cần lấy (mặc định: 10)',
+        example: 10
+    })
+    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm được xem nhiều nhất được trả về thành công' })
+    async getMostViewedProducts(@Query() query: MostViewedProductsQueryDto) {
+        return this.productService.getMostViewedProducts(query.limit);
+    }
+
+    @Get('top-discount')
+    @ApiOperation({ 
+        summary: 'Lấy sản phẩm khuyến mãi cao nhất', 
+        description: 'Lấy danh sách sản phẩm có khuyến mãi cao nhất cho trang chủ (có thể tùy chỉnh số lượng)' 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm cần lấy (mặc định: 10)',
+        example: 10
+    })
+    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm khuyến mãi cao nhất được trả về thành công' })
+    async getTopDiscountProducts(@Query() query: TopDiscountProductsQueryDto) {
+        return this.productService.getTopDiscountProducts(query.limit);
+    }
+
+    @Get('homepage')
+    @ApiOperation({ 
+        summary: 'Lấy tất cả sản phẩm cho trang chủ', 
+        description: 'Lấy tất cả các loại sản phẩm cho trang chủ trong một API call (có thể tùy chỉnh số lượng cho từng loại)' 
+    })
+    @ApiQuery({ 
+        name: 'latestLimit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm mới nhất (mặc định: 8)',
+        example: 8
+    })
+    @ApiQuery({ 
+        name: 'bestSellingLimit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm bán chạy (mặc định: 6)',
+        example: 6
+    })
+    @ApiQuery({ 
+        name: 'mostViewedLimit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm được xem nhiều (mặc định: 8)',
+        example: 8
+    })
+    @ApiQuery({ 
+        name: 'topDiscountLimit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm khuyến mãi (mặc định: 4)',
+        example: 4
+    })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Tất cả sản phẩm cho trang chủ được trả về thành công',
+        schema: {
+            type: 'object',
+            properties: {
+                latestProducts: {
+                    type: 'array',
+                    description: 'Sản phẩm mới nhất'
+                },
+                bestSellingProducts: {
+                    type: 'array',
+                    description: 'Sản phẩm bán chạy nhất'
+                },
+                mostViewedProducts: {
+                    type: 'array',
+                    description: 'Sản phẩm được xem nhiều nhất'
+                },
+                topDiscountProducts: {
+                    type: 'array',
+                    description: 'Sản phẩm khuyến mãi cao nhất'
+                }
+            }
+        }
+    })
+    async getHomepageProducts(@Query() query: HomepageProductQueryDto) {
+        return this.productService.getHomepageProducts({
+            latestLimit: query.latestLimit,
+            bestSellingLimit: query.bestSellingLimit,
+            mostViewedLimit: query.mostViewedLimit,
+            topDiscountLimit: query.topDiscountLimit
+        });
     }
 
     @Get('category/:categoryId')

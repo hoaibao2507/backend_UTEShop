@@ -134,4 +134,109 @@ export class ProductService {
             .limit(limit)
             .getMany();
     }
+
+    // API cho trang chủ - sản phẩm mới nhất
+    async getLatestProducts(limit: number = 10): Promise<Product[]> {
+        return this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .where('product.stockQuantity > 0') // Chỉ lấy sản phẩm còn hàng
+            .orderBy('product.createdAt', 'DESC')
+            .limit(limit)
+            .getMany();
+    }
+
+    // API cho trang chủ - sản phẩm bán chạy nhất
+    async getBestSellingProducts(limit: number = 10): Promise<Product[]> {
+        return this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .leftJoin('product.orderDetails', 'orderDetail')
+            .leftJoin('orderDetail.order', 'order')
+            .where('product.stockQuantity > 0')
+            .andWhere('order.status = :status', { status: 'completed' }) // Chỉ tính đơn hàng đã hoàn thành
+            .select([
+                'product',
+                'category',
+                'images',
+                'COUNT(orderDetail.orderDetailId) as totalSold'
+            ])
+            .groupBy('product.productId')
+            .addGroupBy('category.categoryId')
+            .addGroupBy('images.imageId')
+            .orderBy('totalSold', 'DESC')
+            .limit(limit)
+            .getMany();
+    }
+
+    // API cho trang chủ - sản phẩm được xem nhiều nhất
+    async getMostViewedProducts(limit: number = 10): Promise<Product[]> {
+        return this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .leftJoin('product.views', 'productView')
+            .where('product.stockQuantity > 0')
+            .select([
+                'product',
+                'category',
+                'images',
+                'COUNT(productView.viewId) as totalViews'
+            ])
+            .groupBy('product.productId')
+            .addGroupBy('category.categoryId')
+            .addGroupBy('images.imageId')
+            .orderBy('totalViews', 'DESC')
+            .limit(limit)
+            .getMany();
+    }
+
+    // API cho trang chủ - sản phẩm khuyến mãi cao nhất
+    async getTopDiscountProducts(limit: number = 10): Promise<Product[]> {
+        return this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .where('product.discountPercent > 0')
+            .andWhere('product.stockQuantity > 0')
+            .orderBy('product.discountPercent', 'DESC')
+            .limit(limit)
+            .getMany();
+    }
+
+    // API tổng hợp cho trang chủ
+    async getHomepageProducts(limits?: {
+        latestLimit?: number;
+        bestSellingLimit?: number;
+        mostViewedLimit?: number;
+        topDiscountLimit?: number;
+    }): Promise<{
+        latestProducts: Product[];
+        bestSellingProducts: Product[];
+        mostViewedProducts: Product[];
+        topDiscountProducts: Product[];
+    }> {
+        const {
+            latestLimit = 8,
+            bestSellingLimit = 6,
+            mostViewedLimit = 8,
+            topDiscountLimit = 4
+        } = limits || {};
+
+        const [latestProducts, bestSellingProducts, mostViewedProducts, topDiscountProducts] = await Promise.all([
+            this.getLatestProducts(latestLimit),
+            this.getBestSellingProducts(bestSellingLimit),
+            this.getMostViewedProducts(mostViewedLimit),
+            this.getTopDiscountProducts(topDiscountLimit)
+        ]);
+
+        return {
+            latestProducts,
+            bestSellingProducts,
+            mostViewedProducts,
+            topDiscountProducts
+        };
+    }
 }

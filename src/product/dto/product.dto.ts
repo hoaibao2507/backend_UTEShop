@@ -1,5 +1,6 @@
 import { IsString, IsNotEmpty, IsOptional, IsNumber, IsPositive, Min, Max, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateProductDto {
     @IsNumber()
@@ -101,4 +102,103 @@ export class ProductQueryDto {
     @IsOptional()
     @IsString()
     sortOrder?: 'ASC' | 'DESC' = 'DESC';
+}
+
+// DTO cho các API trang chủ
+export class HomepageProductQueryDto {
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm mới nhất cần lấy', 
+        example: 8, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    latestLimit?: number;
+
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm bán chạy cần lấy', 
+        example: 6, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    bestSellingLimit?: number;
+
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm được xem nhiều cần lấy', 
+        example: 8, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    mostViewedLimit?: number;
+
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm khuyến mãi cần lấy', 
+        example: 4, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    topDiscountLimit?: number;
+}
+
+export class LatestProductsQueryDto {
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm mới nhất cần lấy', 
+        example: 10, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    limit?: number;
+}
+
+export class BestSellingProductsQueryDto {
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm bán chạy cần lấy', 
+        example: 10, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    limit?: number;
+}
+
+export class MostViewedProductsQueryDto {
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm được xem nhiều cần lấy', 
+        example: 10, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    limit?: number;
+}
+
+export class TopDiscountProductsQueryDto {
+    @ApiProperty({ 
+        description: 'Số lượng sản phẩm khuyến mãi cần lấy', 
+        example: 10, 
+        required: false,
+        type: 'number'
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsPositive()
+    limit?: number;
 }
