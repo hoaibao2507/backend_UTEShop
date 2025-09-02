@@ -36,6 +36,19 @@ export class UsersService {
         return await this.usersRepository.save(existingUser);
     }
 
+    async findById(id: number): Promise<User> {
+        const user = await this.usersRepository.findOne({ 
+            where: { id },
+            select: ['id', 'firstName', 'lastName', 'email', 'phone', 'address', 'city', 'gender', 'dateOfBirth', 'isVerified', 'createdAt', 'updatedAt'] // Không có password, otp, refreshToken
+        });
+        
+        if (!user) {
+            throw new Error('User không tồn tại');
+        }
+        
+        return user;
+    }
+
     async verifyOtp(email: string, otp: string): Promise<{ message: string }> {
         const user = await this.usersRepository.findOne({ where: { email } });
 

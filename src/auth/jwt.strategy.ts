@@ -1,18 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: 'MY_SECRET_KEY', // 👉 nên để trong .env
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'fallback_secret_key_2025',
     });
   }
 
   async validate(payload: any) {
-    return { userId: payload.sub, email: payload.email };
+    console.log('🔍 JWT payload:', payload); // Debug log
+    return { id: payload.sub, email: payload.email }; // Sửa: id thay vì userId
   }
 }
