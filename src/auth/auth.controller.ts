@@ -106,7 +106,7 @@ export class AuthController {
     })
     async verifyOtp(
         @Body() body: any,
-    ): Promise<{ message: string }> {
+    ): Promise<{ message: string; user?: User; access_token?: string; refresh_token?: string }> {
         try {
             // Kiểm tra body và các trường bắt buộc
             if (!body || !body.email || !body.otp) {
@@ -124,7 +124,21 @@ export class AuthController {
                 throw new BadRequestException('OTP phải là 6 chữ số');
             }
 
-            return await this.usersService.verifyOtp(body.email, body.otp);
+            const result = await this.usersService.verifyOtp(body.email, body.otp);
+            
+            // Nếu xác thực thành công, tạo token và refreshToken
+            if (result.user) {
+                const tokens = await this.authService.login(result.user);
+                return {
+                    message: result.message,
+                    user: result.user,
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token
+                };
+            }
+            
+            // Nếu xác thực không thành công, chỉ trả về message
+            return { message: result.message };
         } catch (error) {
             if (error instanceof BadRequestException) {
                 throw error;
