@@ -49,7 +49,7 @@ export class UsersService {
         return user;
     }
 
-    async verifyOtp(email: string, otp: string): Promise<{ message: string }> {
+    async verifyOtp(email: string, otp: string): Promise<{ message: string; user?: User }> {
         const user = await this.usersRepository.findOne({ where: { email } });
 
         if (!user) {
@@ -74,6 +74,8 @@ export class UsersService {
         user.otpExpiry = 0;
         await this.usersRepository.save(user);
 
-        return { message: 'Xác thực thành công' };
+        // Trả về user data (không bao gồm password, otp, refreshToken)
+        const { password, otpCode, otpExpiry, refreshToken, ...userData } = user;
+        return { message: 'Xác thực thành công', user: userData as User };
     }
 }
