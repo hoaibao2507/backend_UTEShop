@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { User } from '../users/users.entity';
-import { OrderDetail } from './order-detail.entity';
+import { OrderDetail } from '../entities/order-detail.entity';
 
 export enum OrderStatus {
     PENDING = 'pending',
@@ -21,7 +21,7 @@ export class Order {
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
     orderDate: Date;
 
-    @Column({ type: 'decimal', precision: 10, scale: 2 })
+    @Column({ type: 'decimal', precision: 15, scale: 2 })
     totalAmount: number;
 
     @Column({
