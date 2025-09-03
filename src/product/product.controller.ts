@@ -50,6 +50,8 @@ export class ProductController {
         return this.productService.getLatestProducts(query.limit);
     }
 
+
+
     @Get('best-selling')
     @ApiOperation({ 
         summary: 'Lấy sản phẩm bán chạy nhất', 
