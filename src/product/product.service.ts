@@ -163,26 +163,77 @@ export class ProductService {
 
     // API cho trang chủ - sản phẩm bán chạy nhất
     async getBestSellingProducts(limit: number = 10): Promise<Product[]> {
-        return this.productRepository
+        // Query để lấy danh sách sản phẩm bán chạy nhất với số lượng đã bán
+        const bestSellingQuery = this.productRepository
             .createQueryBuilder('product')
-            .leftJoinAndSelect('product.category', 'category')
-            .leftJoinAndSelect('product.images', 'images')
             .leftJoin('product.orderDetails', 'orderDetail')
             .leftJoin('orderDetail.order', 'order')
             .where('product.stockQuantity > 0')
-            .andWhere('order.status = :status', { status: 'completed' }) // Chỉ tính đơn hàng đã hoàn thành
+            .andWhere('order.status = :status', { status: 'completed' })
             .select([
-                'product',
-                'category',
-                'images',
+                'product.productId as productId',
                 'COUNT(orderDetail.orderDetailId) as totalSold'
             ])
             .groupBy('product.productId')
-            .addGroupBy('category.categoryId')
-            .addGroupBy('images.imageId')
             .orderBy('totalSold', 'DESC')
-            .limit(limit)
+            .limit(limit);
+
+        const bestSellingResults = await bestSellingQuery.getRawMany();
+        
+        // Nếu có ít hơn limit sản phẩm có đơn hàng, bổ sung bằng sản phẩm mới nhất
+        if (bestSellingResults.length < limit) {
+            const existingProductIds = bestSellingResults.map(result => result.productId);
+            const remainingLimit = limit - bestSellingResults.length;
+            
+            // Lấy thêm sản phẩm mới nhất không có trong danh sách bán chạy
+            const additionalProducts = await this.productRepository
+                .createQueryBuilder('product')
+                .leftJoinAndSelect('product.category', 'category')
+                .leftJoinAndSelect('product.images', 'images')
+                .where('product.stockQuantity > 0')
+                .andWhere('product.productId NOT IN (:...ids)', { ids: existingProductIds.length > 0 ? existingProductIds : [0] })
+                .orderBy('product.createdAt', 'DESC')
+                .limit(remainingLimit)
+                .getMany();
+            
+            // Load đầy đủ thông tin cho sản phẩm bán chạy
+            const bestSellingProducts = existingProductIds.length > 0 ? await this.productRepository
+                .createQueryBuilder('product')
+                .leftJoinAndSelect('product.category', 'category')
+                .leftJoinAndSelect('product.images', 'images')
+                .where('product.productId IN (:...ids)', { ids: existingProductIds })
+                .getMany() : [];
+            
+            // Sắp xếp lại theo thứ tự bán chạy
+            const sortedBestSelling = existingProductIds.map(id => 
+                bestSellingProducts.find(product => product.productId === id)
+            ).filter((product): product is Product => product !== undefined);
+            
+            return [...sortedBestSelling, ...additionalProducts];
+        }
+        
+        if (bestSellingResults.length === 0) {
+            // Nếu không có sản phẩm nào có đơn hàng, trả về sản phẩm mới nhất
+            return this.getLatestProducts(limit);
+        }
+
+        // Lấy danh sách productId từ kết quả
+        const productIds = bestSellingResults.map(result => result.productId);
+        
+        // Load đầy đủ thông tin sản phẩm với relations
+        const products = await this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .where('product.productId IN (:...ids)', { ids: productIds })
             .getMany();
+
+        // Sắp xếp lại theo thứ tự bán chạy
+        const sortedProducts = productIds.map(id => 
+            products.find(product => product.productId === id)
+        ).filter((product): product is Product => product !== undefined);
+
+        return sortedProducts;
     }
 
     // API cho trang chủ - sản phẩm được xem nhiều nhất
