@@ -137,14 +137,26 @@ export class ProductService {
 
     // API cho trang chủ - sản phẩm mới nhất
     async getLatestProducts(limit: number = 10): Promise<Product[]> {
-        return this.productRepository
+        // Query đơn giản trước để lấy danh sách sản phẩm
+        const simpleResult = await this.productRepository
             .createQueryBuilder('product')
-            .leftJoinAndSelect('product.category', 'category')
-            .leftJoinAndSelect('product.images', 'images')
-            .where('product.stockQuantity > 0') // Chỉ lấy sản phẩm còn hàng
+            .where('product.stockQuantity > 0')
             .orderBy('product.createdAt', 'DESC')
             .limit(limit)
             .getMany();
+        
+        // Nếu có kết quả, load relations
+        if (simpleResult.length > 0) {
+            return await this.productRepository
+                .createQueryBuilder('product')
+                .leftJoinAndSelect('product.category', 'category')
+                .leftJoinAndSelect('product.images', 'images')
+                .where('product.productId IN (:...ids)', { ids: simpleResult.map(p => p.productId) })
+                .orderBy('product.createdAt', 'DESC')
+                .getMany();
+        }
+        
+        return simpleResult;
     }
 
 

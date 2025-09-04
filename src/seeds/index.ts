@@ -366,16 +366,24 @@ async function seedProductImages(products: Product[]) {
     'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500',
     'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=500',
     'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500',
-    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500'
+    'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=500',
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500',
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'
   ];
 
   for (const product of products) {
-    // Mỗi sản phẩm có 3-5 hình ảnh
-    const numImages = Math.floor(Math.random() * 3) + 3;
+    // Mỗi sản phẩm có 4-6 hình ảnh
+    const numImages = Math.floor(Math.random() * 3) + 4;
+    
+    // Tạo array ngẫu nhiên các index để tránh trùng lặp
+    const shuffledIndices = Array.from({ length: imageUrls.length }, (_, i) => i)
+      .sort(() => Math.random() - 0.5);
+    
     for (let i = 0; i < numImages; i++) {
       const productImage = productImageRepository.create({
         productId: product.productId,
-        imageUrl: imageUrls[i % imageUrls.length],
+        imageUrl: imageUrls[shuffledIndices[i % imageUrls.length]],
         isPrimary: i === 0
       });
       await productImageRepository.save(productImage);
