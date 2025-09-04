@@ -335,15 +335,42 @@ export class ProductService {
 
     // API cho trang chủ - sản phẩm khuyến mãi cao nhất
     async getTopDiscountProducts(limit: number = 10): Promise<Product[]> {
-        return this.productRepository
-            .createQueryBuilder('product')
-            .leftJoinAndSelect('product.category', 'category')
-            .leftJoinAndSelect('product.images', 'images')
-            .where('product.discountPercent > 0')
-            .andWhere('product.stockQuantity > 0')
-            .orderBy('product.discountPercent', 'DESC')
-            .limit(limit)
-            .getMany();
+        try {
+            // Simple approach: get products without relations first, then add relations
+            const productIds = await this.productRepository
+                .createQueryBuilder('product')
+                .select('product.productId')
+                .where('product.discountPercent > 0')
+                .andWhere('product.stockQuantity > 0')
+                .orderBy('product.discountPercent', 'DESC')
+                .addOrderBy('product.productId', 'ASC')
+                .limit(limit)
+                .getRawMany();
+
+            console.log(`Found ${productIds.length} product IDs with discount > 0`);
+
+            if (productIds.length === 0) {
+                return [];
+            }
+
+            // Now get full product data with relations
+            const products = await this.productRepository
+                .createQueryBuilder('product')
+                .leftJoinAndSelect('product.category', 'category')
+                .leftJoinAndSelect('product.images', 'images')
+                .where('product.productId IN (:...productIds)', { 
+                    productIds: productIds.map(p => p.product_productId) 
+                })
+                .orderBy('product.discountPercent', 'DESC')
+                .addOrderBy('product.productId', 'ASC')
+                .getMany();
+
+            console.log(`Returning ${products.length} products with relations`);
+            return products;
+        } catch (error) {
+            console.error('Error in getTopDiscountProducts:', error);
+            throw error;
+        }
     }
 
     // API tổng hợp cho trang chủ
