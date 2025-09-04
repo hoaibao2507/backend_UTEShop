@@ -237,25 +237,100 @@ export class ProductService {
     }
 
     // API cho trang chủ - sản phẩm được xem nhiều nhất
-    async getMostViewedProducts(limit: number = 10): Promise<Product[]> {
-        return this.productRepository
+    async getMostViewedProducts(limit: number = 10): Promise<any[]> {
+        // Get products with view counts, ordered by most viewed
+        const productsWithViews = await this.productRepository
             .createQueryBuilder('product')
-            .leftJoinAndSelect('product.category', 'category')
-            .leftJoinAndSelect('product.images', 'images')
             .leftJoin('product.views', 'productView')
+            .leftJoin('product.category', 'category')
             .where('product.stockQuantity > 0')
             .select([
-                'product',
-                'category',
-                'images',
+                'product.productId',
+                'product.categoryId', 
+                'product.productName',
+                'product.description',
+                'product.price',
+                'product.discountPercent',
+                'product.stockQuantity',
+                'product.createdAt',
+                'product.updatedAt',
+                'category.categoryId',
+                'category.categoryName',
+                'category.description',
+                'category.createdAt',
                 'COUNT(productView.viewId) as totalViews'
             ])
             .groupBy('product.productId')
+            .addGroupBy('product.categoryId')
+            .addGroupBy('product.productName')
+            .addGroupBy('product.description')
+            .addGroupBy('product.price')
+            .addGroupBy('product.discountPercent')
+            .addGroupBy('product.stockQuantity')
+            .addGroupBy('product.createdAt')
+            .addGroupBy('product.updatedAt')
             .addGroupBy('category.categoryId')
-            .addGroupBy('images.imageId')
+            .addGroupBy('category.categoryName')
+            .addGroupBy('category.description')
+            .addGroupBy('category.createdAt')
             .orderBy('totalViews', 'DESC')
             .limit(limit)
-            .getMany();
+            .getRawMany();
+
+        if (productsWithViews.length === 0) {
+            return [];
+        }
+
+        // Get product IDs for fetching images
+        const productIds = productsWithViews.map(p => p.product_productId);
+
+        // Get images for these products
+        const images = await this.productRepository
+            .createQueryBuilder('product')
+            .leftJoin('product.images', 'images')
+            .where('product.productId IN (:...productIds)', { productIds })
+            .select([
+                'images.imageId',
+                'images.productId',
+                'images.imageUrl',
+                'images.isPrimary'
+            ])
+            .getRawMany();
+
+        // Transform results
+        const result = productsWithViews.map(row => {
+            const productId = row.product_productId;
+            const productImages = images
+                .filter(img => img.images_productId === productId)
+                .map(img => ({
+                    imageId: img.images_imageId,
+                    productId: img.images_productId,
+                    imageUrl: img.images_imageUrl,
+                    isPrimary: img.images_isPrimary
+                }));
+
+            return {
+                productId: row.product_productId,
+                categoryId: row.product_categoryId,
+                productName: row.product_productName,
+                description: row.product_description,
+                price: row.product_price,
+                discountPercent: row.product_discountPercent,
+                stockQuantity: row.product_stockQuantity,
+                createdAt: row.product_createdAt,
+                updatedAt: row.product_updatedAt,
+                totalViews: parseInt(row.totalViews),
+                category: {
+                    categoryId: row.category_categoryId,
+                    categoryName: row.category_categoryName,
+                    description: row.category_description,
+                    createdAt: row.category_createdAt
+                },
+                images: productImages
+            };
+        });
+
+        return result;
     }
 
     // API cho trang chủ - sản phẩm khuyến mãi cao nhất
