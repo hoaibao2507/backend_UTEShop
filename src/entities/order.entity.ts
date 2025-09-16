@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { User } from '../users/users.entity';
 import { OrderDetail } from '../entities/order-detail.entity';
+import { OrderTracking } from './order-tracking.entity';
 
 export enum OrderStatus {
     PENDING = 'pending',
@@ -38,6 +39,9 @@ export class Order {
 
     @OneToMany(() => OrderDetail, orderDetail => orderDetail.order)
     orderDetails: OrderDetail[];
+
+    @OneToMany(() => OrderTracking, (tracking) => tracking.order)
+    tracking: OrderTracking[];
 
     // Virtual properties
     get isCompleted(): boolean {
