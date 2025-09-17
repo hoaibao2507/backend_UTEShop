@@ -58,13 +58,14 @@ export class CartService {
     }
 
     async findByUserId(userId: number): Promise<Cart> {
-        const cart = await this.cartRepository.findOne({
+        let cart = await this.cartRepository.findOne({
             where: { userId },
             relations: ['user', 'cartItems', 'cartItems.product'],
         });
 
+        // Nếu user chưa có giỏ hàng, tạo mới
         if (!cart) {
-            throw new NotFoundException(`Cart for user ${userId} not found`);
+            cart = await this.create({ userId });
         }
 
         return cart;
