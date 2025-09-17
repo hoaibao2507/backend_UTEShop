@@ -19,16 +19,6 @@ export class CartController {
         return this.cartService.create(createCartDto);
     }
 
-    @Get()
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth()
-    @ApiOperation({ summary: 'Lấy danh sách giỏ hàng', description: 'Lấy danh sách tất cả giỏ hàng với phân trang (yêu cầu xác thực)' })
-    @ApiResponse({ status: 200, description: 'Danh sách giỏ hàng được trả về thành công' })
-    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    async findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-        return this.cartService.findAll(page, limit);
-    }
-
     @Get('user/:userId')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
@@ -38,6 +28,16 @@ export class CartController {
     @ApiResponse({ status: 404, description: 'Không tìm thấy giỏ hàng' })
     async findByUserId(@Param('userId') userId: string) {
         return this.cartService.findByUserId(+userId);
+    }
+
+    @Get()
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Lấy danh sách giỏ hàng', description: 'Lấy danh sách tất cả giỏ hàng với phân trang (yêu cầu xác thực)' })
+    @ApiResponse({ status: 200, description: 'Danh sách giỏ hàng được trả về thành công' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    async findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
+        return this.cartService.findAll(page, limit);
     }
 
     @Get(':id')
