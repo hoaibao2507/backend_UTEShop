@@ -39,7 +39,7 @@ export class UsersService {
     async findById(id: number): Promise<User> {
         const user = await this.usersRepository.findOne({ 
             where: { id },
-            select: ['id', 'firstName', 'lastName', 'email', 'phone', 'address', 'city', 'gender', 'dateOfBirth', 'isVerified', 'createdAt', 'updatedAt'] // Không có password, otp, refreshToken
+            select: ['id', 'firstName', 'lastName', 'email', 'phone', 'address', 'city', 'gender', 'dateOfBirth', 'isVerified', 'avatar', 'createdAt', 'updatedAt'] // Không có password, otp, refreshToken
         });
         
         if (!user) {
@@ -47,6 +47,16 @@ export class UsersService {
         }
         
         return user;
+    }
+
+    async updateAvatar(id: number, avatarPath: string): Promise<User> {
+        const user = await this.usersRepository.findOne({ where: { id } });
+        if (!user) {
+            throw new Error('User không tồn tại');
+        }
+
+        user.avatar = avatarPath;
+        return await this.usersRepository.save(user);
     }
 
     async verifyOtp(email: string, otp: string): Promise<{ message: string; user?: User }> {
