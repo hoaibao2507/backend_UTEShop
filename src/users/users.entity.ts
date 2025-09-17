@@ -54,6 +54,9 @@ export class User {
     @Column({ nullable: true })
     refreshToken: string;
 
+    @Column({ nullable: true })
+    avatar: string;
+
     @CreateDateColumn()
     createdAt: Date;
 

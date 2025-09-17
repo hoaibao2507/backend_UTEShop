@@ -80,6 +80,10 @@ export class UpdateUserDto {
     @IsOptional()
     @IsDateString()
     dateOfBirth?: string;
+
+    @IsOptional()
+    @IsString()
+    avatar?: string;
 }
 
 export class LoginDto {
