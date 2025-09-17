@@ -17,6 +17,7 @@ import { ProductImageModule } from './product-image/product-image.module';
 import { ProductViewModule } from './product-view/product-view.module';
 import { PaymentMethodModule } from './payment-method/payment-method.module';
 import { PaymentModule } from './payment/payment.module';
+import { VoucherModule } from './voucher/voucher.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -55,6 +56,7 @@ import { join } from 'path';
     ProductViewModule,
     PaymentMethodModule,
     PaymentModule,
+    VoucherModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

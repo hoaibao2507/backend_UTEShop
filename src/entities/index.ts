@@ -11,6 +11,10 @@ export { ProductReview } from './product-review.entity';
 export { PaymentMethod as PaymentMethodEntity } from './payment-method.entity';
 export { Payment, PaymentStatus as PaymentStatusEnum } from './payment.entity';
 export { PaymentTransaction, TransactionStatus } from './payment-transaction.entity';
+export { Voucher } from './voucher.entity';
+export { VoucherDiscountType } from './enums/voucher-discount-type.enum';
+export { VoucherUsage } from './voucher-usage.entity';
+export { OrderVoucher } from './order-voucher.entity';
 
 // Re-export User entity from users module for convenience
 export { User, Gender } from '../users/users.entity';
