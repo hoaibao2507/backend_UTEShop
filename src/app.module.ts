@@ -12,6 +12,7 @@ import { CartModule } from './cart/cart.module';
 import { CartItemModule } from './cart-item/cart-item.module';
 import { OrderModule } from './order/order.module';
 import { OrderDetailModule } from './order-detail/order-detail.module';
+import { OrderTrackingModule } from './order-tracking/order-tracking.module';
 import { ProductReviewModule } from './product-review/product-review.module';
 import { ProductImageModule } from './product-image/product-image.module';
 import { ProductViewModule } from './product-view/product-view.module';
@@ -42,6 +43,7 @@ import { ProductViewModule } from './product-view/product-view.module';
     CartItemModule,
     OrderModule,
     OrderDetailModule,
+    OrderTrackingModule,
     ProductReviewModule,
     ProductImageModule,
     ProductViewModule,

@@ -1,34 +1,61 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  UseGuards,
+  Request,
+  ForbiddenException,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { OrderTrackingService } from './order-tracking.service';
 import { CreateOrderTrackingDto } from './dto/create-order-tracking.dto';
 import { UpdateOrderTrackingDto } from './dto/update-order-tracking.dto';
 
+@ApiTags('order-tracking')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('order-tracking')
 export class OrderTrackingController {
   constructor(private readonly trackingService: OrderTrackingService) {}
 
   @Post()
-  create(@Body() dto: CreateOrderTrackingDto) {
+  @ApiOperation({ summary: 'Thêm trạng thái tracking mới (Admin/Shop)' })
+  async create(@Body() dto: CreateOrderTrackingDto) {
     return this.trackingService.create(dto);
   }
 
   @Get()
-  findAll() {
+  @ApiOperation({ summary: 'Lấy tất cả tracking (Admin)' })
+  async findAll() {
     return this.trackingService.findAll();
   }
 
+  @Get('order/:orderId')
+  @ApiOperation({ summary: 'Lấy lịch sử trạng thái của 1 đơn hàng (User)' })
+  async findByOrder(@Param('orderId') orderId: string, @Request() req) {
+    return this.trackingService.findByOrder(+orderId);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Lấy chi tiết 1 tracking theo trackingId (Admin)' })
+  async findOne(@Param('id') id: string) {
     return this.trackingService.findOne(+id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateOrderTrackingDto) {
+  @ApiOperation({ summary: 'Cập nhật trạng thái tracking (Admin/Shop)' })
+  async update(@Param('id') id: string, @Body() dto: UpdateOrderTrackingDto) {
     return this.trackingService.update(+id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Xóa trạng thái tracking (Admin/Shop)' })
+  async remove(@Param('id') id: string) {
     return this.trackingService.remove(+id);
   }
 }

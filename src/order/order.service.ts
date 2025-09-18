@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException , ForbiddenException} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order, OrderStatus } from '../entities/order.entity';
+import { Order} from '../entities/order.entity';
+import { OrderTracking } from '../entities/order-tracking.entity';
+import { OrderStatus } from '../entities/order-status.enum';
 import { CreateOrderDto, UpdateOrderDto, OrderQueryDto } from './dto/order.dto';
 
 @Injectable()
@@ -9,13 +11,15 @@ export class OrderService {
     constructor(
         @InjectRepository(Order)
         private orderRepository: Repository<Order>,
+        @InjectRepository(OrderTracking)
+    private trackingRepository: Repository<OrderTracking>,
     ) {}
 
     async create(createOrderDto: CreateOrderDto): Promise<Order> {
         try {
             const order = this.orderRepository.create({
                 ...createOrderDto,
-                status: createOrderDto.status || OrderStatus.PENDING,
+                status: createOrderDto.status || OrderStatus.NEW,
             });
             return await this.orderRepository.save(order);
         } catch (error) {
@@ -60,7 +64,7 @@ export class OrderService {
     async findOne(id: number): Promise<Order> {
         const order = await this.orderRepository.findOne({
             where: { orderId: id },
-            relations: ['user', 'orderDetails', 'orderDetails.product'],
+            relations: ['user', 'orderDetails', 'orderDetails.product', 'orderDetails.product.images'],
         });
 
         if (!order) {
@@ -75,7 +79,7 @@ export class OrderService {
             where: { userId },
             skip: (page - 1) * limit,
             take: limit,
-            relations: ['orderDetails', 'orderDetails.product'],
+            relations: ['orderDetails', 'orderDetails.product', 'orderDetails.product.images'],
             order: { orderDate: 'DESC' },
         });
 
@@ -111,7 +115,7 @@ export class OrderService {
     async updateStatus(id: number, status: OrderStatus): Promise<Order> {
         const order = await this.findOne(id);
         
-        if (!order.canBeCancelled && status === OrderStatus.CANCELLED) {
+        if (!order.canBeCanceled && status === OrderStatus.CANCELED) {
             throw new BadRequestException('Order cannot be cancelled in current status');
         }
 
@@ -122,9 +126,9 @@ export class OrderService {
     async getOrderStatistics(): Promise<{ totalOrders: number; pendingOrders: number; completedOrders: number; cancelledOrders: number }> {
         const [totalOrders, pendingOrders, completedOrders, cancelledOrders] = await Promise.all([
             this.orderRepository.count(),
-            this.orderRepository.count({ where: { status: OrderStatus.PENDING } }),
-            this.orderRepository.count({ where: { status: OrderStatus.COMPLETED } }),
-            this.orderRepository.count({ where: { status: OrderStatus.CANCELLED } }),
+            this.orderRepository.count({ where: { status: OrderStatus.NEW } }),
+            this.orderRepository.count({ where: { status: OrderStatus.DELIVERED } }),
+            this.orderRepository.count({ where: { status: OrderStatus.CANCELED } }),
         ]);
 
         return {
@@ -151,4 +155,55 @@ export class OrderService {
             limit,
         };
     }
+
+    async cancelOrder(orderId: number) {
+    const order = await this.orderRepository.findOneBy({ orderId });
+    if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
+
+    const now = new Date();
+    const createdAt = new Date(order.orderDate);
+    const diffMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+
+    let note = '';
+
+    switch (order.status) {
+      case OrderStatus.NEW:
+      case OrderStatus.CONFIRMED:
+        if (diffMinutes <= 30) {
+          order.status = OrderStatus.CANCELED;
+          note = 'Người dùng hủy đơn trong vòng 30 phút';
+        } else {
+          throw new ForbiddenException('Không thể hủy sau 30 phút ở trạng thái này');
+        }
+        break;
+
+      case OrderStatus.PREPARING:
+        order.status = OrderStatus.CANCEL_REQUEST;
+        note = 'Người dùng gửi yêu cầu hủy đơn';
+        break;
+
+      case OrderStatus.SHIPPING:
+      case OrderStatus.DELIVERED:
+        throw new ForbiddenException('Đơn hàng đang giao hoặc đã giao, không thể hủy');
+
+      case OrderStatus.CANCELED:
+        throw new ForbiddenException('Đơn hàng đã bị hủy trước đó');
+      case OrderStatus.CANCEL_REQUEST:
+        throw new ForbiddenException('Đơn hàng đã có yêu cầu hủy');
+    }
+
+    // 1. Cập nhật order
+    await this.orderRepository.save(order);
+
+    // 2. Ghi log vào order_tracking
+    await this.trackingRepository.save({
+      order,
+      status: order.status,
+      note,
+    });
+
+    return order;
+  }
+
+
 }

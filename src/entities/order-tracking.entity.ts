@@ -1,6 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  JoinColumn,
+} from 'typeorm';
 import { Order } from './order.entity';
-import { OrderStatus } from './order.entity';
+import { OrderStatus } from './order-status.enum';
 
 @Entity('order_tracking')
 export class OrderTracking {
@@ -19,6 +26,10 @@ export class OrderTracking {
   @CreateDateColumn()
   createdAt: Date;
 
+  @Column()
+  orderId: number;
+
   @ManyToOne(() => Order, (order) => order.tracking, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'orderId' })
   order: Order;
 }

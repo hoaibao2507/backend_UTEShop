@@ -5,12 +5,14 @@ import { Product } from '../entities/product.entity';
 import { ProductImage } from '../entities/product-image.entity';
 import { ProductReview } from '../entities/product-review.entity';
 import { User, Gender } from '../users/users.entity';
-import { Order, OrderStatus } from '../entities/order.entity';
+import { Order } from '../entities/order.entity';
+import { OrderStatus } from '../entities/order-status.enum';
 import { OrderDetail } from '../entities/order-detail.entity';
 import { Cart } from '../entities/cart.entity';
 import { CartItem } from '../entities/cart-item.entity';
 import { ProductView } from '../entities/product-view.entity';
 import * as bcrypt from 'bcrypt';
+import { OrderTracking } from 'src/entities';
 
 config();
 
@@ -29,6 +31,7 @@ const AppDataSource = new DataSource({
     User,
     Order,
     OrderDetail,
+    OrderTracking,
     Cart,
     CartItem,
     ProductView,
@@ -430,7 +433,7 @@ async function seedOrders(users: User[], products: Product[]) {
   const orderRepository = AppDataSource.getRepository(Order);
   const orderDetailRepository = AppDataSource.getRepository(OrderDetail);
   
-  const orderStatuses = [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.COMPLETED];
+  const orderStatuses = [OrderStatus.NEW, OrderStatus.CONFIRMED, OrderStatus.SHIPPING, OrderStatus.DELIVERED];
 
   for (let i = 0; i < 20; i++) {
     const randomUser = users[Math.floor(Math.random() * users.length)];
