@@ -1,58 +1,63 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../users/users.entity';
-import { OrderDetail } from '../entities/order-detail.entity';
+import { OrderDetail } from './order-detail.entity';
 import { OrderTracking } from './order-tracking.entity';
-
-export enum OrderStatus {
-    PENDING = 'pending',
-    PAID = 'paid',
-    SHIPPED = 'shipped',
-    COMPLETED = 'completed',
-    CANCELLED = 'cancelled'
-}
+import { OrderStatus } from './order-status.enum';
 
 @Entity('orders')
 export class Order {
-    @PrimaryGeneratedColumn()
-    orderId: number;
+  @PrimaryGeneratedColumn()
+  orderId: number;
 
-    @Column()
-    userId: number;
+  @Column()
+  userId: number;
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    orderDate: Date;
+  @CreateDateColumn({ type: 'timestamp' })
+  orderDate: Date;
 
-    @Column({ type: 'decimal', precision: 15, scale: 2 })
-    totalAmount: number;
+  @Column({ type: 'decimal', precision: 15, scale: 2 })
+  totalAmount: number;
 
-    @Column({
-        type: 'enum',
-        enum: OrderStatus,
-        default: OrderStatus.PENDING
-    })
-    status: OrderStatus;
+  @Column({
+    type: 'enum',
+    enum: OrderStatus,
+    default: OrderStatus.NEW,
+  })
+  status: OrderStatus;
 
-    // Relations
-    @ManyToOne(() => User, user => user.orders)
-    @JoinColumn({ name: 'userId' })
-    user: User;
+  // Quan hệ với user
+  @ManyToOne(() => User, (user) => user.orders)
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
-    @OneToMany(() => OrderDetail, orderDetail => orderDetail.order)
-    orderDetails: OrderDetail[];
+  // Quan hệ với chi tiết đơn hàng
+  @OneToMany(() => OrderDetail, (orderDetail) => orderDetail.order)
+  orderDetails: OrderDetail[];
 
-    @OneToMany(() => OrderTracking, (tracking) => tracking.order)
-    tracking: OrderTracking[];
+  // Quan hệ với lịch sử tracking
+  @OneToMany(() => OrderTracking, (tracking) => tracking.order)
+  tracking: OrderTracking[];
 
-    // Virtual properties
-    get isCompleted(): boolean {
-        return this.status === OrderStatus.COMPLETED;
-    }
+  // Virtual helpers
+  get isDelivered(): boolean {
+    return this.status === OrderStatus.DELIVERED;
+  }
 
-    get isCancelled(): boolean {
-        return this.status === OrderStatus.CANCELLED;
-    }
+  get isCanceled(): boolean {
+    return this.status === OrderStatus.CANCELED;
+  }
 
-    get canBeCancelled(): boolean {
-        return this.status === OrderStatus.PENDING || this.status === OrderStatus.PAID;
-    }
+  get canBeCanceled(): boolean {
+    return (
+      this.status === OrderStatus.NEW || this.status === OrderStatus.CONFIRMED
+    );
+  }
 }
