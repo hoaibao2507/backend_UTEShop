@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Post, UseGuards, Param, ParseIntPipe, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, Param, ParseIntPipe, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './users.entity';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
 import { CreateUserDto, UpdateUserDto } from 'src/dto/users.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 
 @ApiTags('users')
 @Controller('users')
@@ -66,6 +69,7 @@ export class UsersController {
                 gender: "male",
                 dateOfBirth: "1990-01-01",
                 isVerified: true,
+                avatar: "/uploads/avatar_abc123.jpg",
                 createdAt: "2025-08-30T10:00:00.000Z",
                 updatedAt: "2025-08-30T10:00:00.000Z"
             },
@@ -80,6 +84,7 @@ export class UsersController {
                 gender: { type: 'string', example: 'male', description: 'Giới tính' },
                 dateOfBirth: { type: 'string', example: '1990-01-01', description: 'Ngày sinh' },
                 isVerified: { type: 'boolean', example: true, description: 'Trạng thái xác thực' },
+                avatar: { type: 'string', example: '/uploads/avatar_abc123.jpg', description: 'Đường dẫn ảnh avatar' },
                 createdAt: { type: 'string', example: '2025-08-30T10:00:00Z', description: 'Ngày tạo' },
                 updatedAt: { type: 'string', example: '2025-08-30T10:00:00Z', description: 'Ngày cập nhật' }
             }
@@ -156,5 +161,72 @@ export class UsersController {
     @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
     async update(@Param('id', ParseIntPipe) id: number, @Body() user: UpdateUserDto): Promise<User> {
         return this.usersService.update(id, user);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post('upload-avatar')
+    @ApiBearerAuth()
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ 
+        summary: 'Upload avatar cho user đang đăng nhập', 
+        description: 'Upload ảnh avatar cho user hiện tại (yêu cầu xác thực JWT)' 
+    })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Avatar được upload thành công',
+        schema: {
+            type: 'object',
+            example: {
+                message: 'Avatar uploaded successfully',
+                avatarUrl: '/uploads/avatar_1234567890.jpg',
+                user: {
+                    id: 1,
+                    firstName: 'Nguyễn',
+                    lastName: 'Văn A',
+                    email: 'nguyenvana@gmail.com',
+                    avatar: '/uploads/avatar_1234567890.jpg'
+                }
+            }
+        }
+    })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    @ApiResponse({ status: 400, description: 'File không hợp lệ hoặc không có file' })
+    @UseInterceptors(FileInterceptor('avatar', {
+        storage: diskStorage({
+            destination: './uploads',
+            filename: (req, file, cb) => {
+                const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
+                return cb(null, `avatar_${randomName}${extname(file.originalname)}`);
+            }
+        }),
+        fileFilter: (req, file, cb) => {
+            if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+                return cb(new BadRequestException('Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif)'), false);
+            }
+            cb(null, true);
+        },
+        limits: {
+            fileSize: 5 * 1024 * 1024, // 5MB
+        }
+    }))
+    async uploadAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
+        try {
+            if (!file) {
+                throw new BadRequestException('Không có file được upload');
+            }
+
+            const userId = req.user.id;
+            const avatarPath = `/uploads/${file.filename}`;
+            
+            const updatedUser = await this.usersService.updateAvatar(userId, avatarPath);
+            
+            return {
+                message: 'Avatar uploaded successfully',
+                avatarUrl: avatarPath,
+                user: updatedUser
+            };
+        } catch (error) {
+            throw new BadRequestException(`Lỗi upload avatar: ${error.message}`);
+        }
     }
 }

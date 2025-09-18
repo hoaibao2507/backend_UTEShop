@@ -17,6 +17,7 @@ export class OrderTracking {
   @Column({
     type: 'enum',
     enum: OrderStatus,
+    enumName: 'order_tracking_status'
   })
   status: OrderStatus;
 

@@ -16,10 +16,16 @@ import { OrderTrackingModule } from './order-tracking/order-tracking.module';
 import { ProductReviewModule } from './product-review/product-review.module';
 import { ProductImageModule } from './product-image/product-image.module';
 import { ProductViewModule } from './product-view/product-view.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -31,7 +37,7 @@ import { ProductViewModule } from './product-view/product-view.module';
         password: config.get<string>('DB_PASS'),
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: false, // Tắt synchronize để tránh lỗi schema
+        synchronize: true, // Bật auto-sync như Hibernate
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
       }),
     }),
