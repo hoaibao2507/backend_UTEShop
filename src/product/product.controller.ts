@@ -170,6 +170,59 @@ export class ProductController {
         });
     }
 
+    @Get(':id/similar')
+    @ApiOperation({ 
+        summary: 'Lấy sản phẩm tương tự', 
+        description: 'Lấy danh sách sản phẩm tương tự với sản phẩm hiện tại (dựa trên category và giá)' 
+    })
+    @ApiQuery({ 
+        name: 'limit', 
+        required: false, 
+        type: 'number', 
+        description: 'Số lượng sản phẩm tương tự (mặc định: 6)',
+        example: 6
+    })
+    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm tương tự được trả về thành công' })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
+    async getSimilarProducts(@Param('id') id: string, @Query('limit') limit: number = 6) {
+        return this.productService.getSimilarProducts(+id, limit);
+    }
+
+    @Get(':id/stats')
+    @ApiOperation({ 
+        summary: 'Lấy thống kê tổng quan sản phẩm', 
+        description: 'Lấy thống kê chi tiết về sản phẩm: số lượt xem, đánh giá, mua hàng, yêu thích' 
+    })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Thống kê sản phẩm được trả về thành công',
+        schema: {
+            type: 'object',
+            properties: {
+                productId: { type: 'number' },
+                totalViews: { type: 'number' },
+                totalReviews: { type: 'number' },
+                totalPurchases: { type: 'number' },
+                totalWishlists: { type: 'number' },
+                averageRating: { type: 'number' },
+                ratingDistribution: {
+                    type: 'object',
+                    properties: {
+                        1: { type: 'number' },
+                        2: { type: 'number' },
+                        3: { type: 'number' },
+                        4: { type: 'number' },
+                        5: { type: 'number' }
+                    }
+                }
+            }
+        }
+    })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
+    async getProductStats(@Param('id') id: string) {
+        return this.productService.getProductStats(+id);
+    }
+
     @Get('category/:categoryId')
     @ApiOperation({ summary: 'Lấy sản phẩm theo danh mục', description: 'Lấy danh sách sản phẩm thuộc một danh mục cụ thể' })
     @ApiResponse({ status: 200, description: 'Danh sách sản phẩm theo danh mục được trả về thành công' })

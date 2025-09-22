@@ -17,6 +17,7 @@ export { Voucher } from './voucher.entity';
 export { VoucherDiscountType } from './enums/voucher-discount-type.enum';
 export { VoucherUsage } from './voucher-usage.entity';
 export { OrderVoucher } from './order-voucher.entity';
+export { Wishlist } from './wishlist.entity';
 
 // Re-export User entity from users module for convenience
 export { User, Gender } from '../users/users.entity';

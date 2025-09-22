@@ -19,6 +19,7 @@ import { ProductViewModule } from './product-view/product-view.module';
 import { PaymentMethodModule } from './payment-method/payment-method.module';
 import { PaymentModule } from './payment/payment.module';
 import { VoucherModule } from './voucher/voucher.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -59,6 +60,7 @@ import { join } from 'path';
     PaymentMethodModule,
     PaymentModule,
     VoucherModule,
+    WishlistModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

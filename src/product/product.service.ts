@@ -406,4 +406,152 @@ export class ProductService {
             topDiscountProducts
         };
     }
+
+    // API cho sản phẩm tương tự
+    async getSimilarProducts(productId: number, limit: number = 6): Promise<Product[]> {
+        // Lấy thông tin sản phẩm hiện tại
+        const currentProduct = await this.findOne(productId);
+        
+        if (!currentProduct) {
+            return [];
+        }
+
+        // Tìm sản phẩm tương tự dựa trên:
+        // 1. Cùng category
+        // 2. Cùng khoảng giá (±30%)
+        // 3. Loại trừ sản phẩm hiện tại
+        const minPrice = currentProduct.price * 0.7;
+        const maxPrice = currentProduct.price * 1.3;
+
+        const similarProducts = await this.productRepository
+            .createQueryBuilder('product')
+            .leftJoinAndSelect('product.category', 'category')
+            .leftJoinAndSelect('product.images', 'images')
+            .where('product.productId != :productId', { productId })
+            .andWhere('product.categoryId = :categoryId', { categoryId: currentProduct.categoryId })
+            .andWhere('product.stockQuantity > 0')
+            .andWhere('product.price BETWEEN :minPrice AND :maxPrice', { minPrice, maxPrice })
+            .orderBy('product.createdAt', 'DESC')
+            .limit(limit)
+            .getMany();
+
+        // Nếu không đủ sản phẩm cùng category và giá, bổ sung bằng sản phẩm cùng category
+        if (similarProducts.length < limit) {
+            const existingIds = similarProducts.map(p => p.productId);
+            const remainingLimit = limit - similarProducts.length;
+
+            const additionalProducts = await this.productRepository
+                .createQueryBuilder('product')
+                .leftJoinAndSelect('product.category', 'category')
+                .leftJoinAndSelect('product.images', 'images')
+                .where('product.productId != :productId', { productId })
+                .andWhere('product.categoryId = :categoryId', { categoryId: currentProduct.categoryId })
+                .andWhere('product.stockQuantity > 0')
+                .andWhere('product.productId NOT IN (:...existingIds)', { existingIds: existingIds.length > 0 ? existingIds : [0] })
+                .orderBy('product.createdAt', 'DESC')
+                .limit(remainingLimit)
+                .getMany();
+
+            similarProducts.push(...additionalProducts);
+        }
+
+        // Nếu vẫn không đủ, bổ sung bằng sản phẩm bán chạy
+        if (similarProducts.length < limit) {
+            const existingIds = similarProducts.map(p => p.productId);
+            const remainingLimit = limit - similarProducts.length;
+
+            const bestSellingProducts = await this.getBestSellingProducts(remainingLimit);
+            const filteredBestSelling = bestSellingProducts.filter(p => 
+                !existingIds.includes(p.productId) && p.productId !== productId
+            );
+
+            similarProducts.push(...filteredBestSelling.slice(0, remainingLimit));
+        }
+
+        return similarProducts.slice(0, limit);
+    }
+
+    // API thống kê tổng quan sản phẩm
+    async getProductStats(productId: number): Promise<{
+        productId: number;
+        totalViews: number;
+        totalReviews: number;
+        totalPurchases: number;
+        totalWishlists: number;
+        averageRating: number;
+        ratingDistribution: { [key: number]: number };
+    }> {
+        const product = await this.findOne(productId);
+        
+        if (!product) {
+            throw new NotFoundException(`Product with ID ${productId} not found`);
+        }
+
+        // Lấy thống kê từ các bảng liên quan
+        const [viewCount, reviewCount, purchaseCount, wishlistCount] = await Promise.all([
+            this.productRepository
+                .createQueryBuilder('product')
+                .leftJoin('product.views', 'views')
+                .where('product.productId = :productId', { productId })
+                .select('COUNT(views.viewId)', 'count')
+                .getRawOne(),
+            
+            this.productRepository
+                .createQueryBuilder('product')
+                .leftJoin('product.reviews', 'reviews')
+                .where('product.productId = :productId', { productId })
+                .select('COUNT(reviews.reviewId)', 'count')
+                .getRawOne(),
+            
+            this.productRepository
+                .createQueryBuilder('product')
+                .leftJoin('product.orderDetails', 'orderDetails')
+                .leftJoin('orderDetails.order', 'order')
+                .where('product.productId = :productId', { productId })
+                .andWhere('order.status = :status', { status: 'DELIVERED' })
+                .select('SUM(orderDetails.quantity)', 'count')
+                .getRawOne(),
+            
+            this.productRepository
+                .createQueryBuilder('product')
+                .leftJoin('product.wishlists', 'wishlists')
+                .where('product.productId = :productId', { productId })
+                .select('COUNT(wishlists.wishlistId)', 'count')
+                .getRawOne()
+        ]);
+
+        // Lấy phân phối rating
+        const ratingStats = await this.productRepository
+            .createQueryBuilder('product')
+            .leftJoin('product.reviews', 'reviews')
+            .where('product.productId = :productId', { productId })
+            .select('reviews.rating', 'rating')
+            .addSelect('COUNT(reviews.reviewId)', 'count')
+            .groupBy('reviews.rating')
+            .getRawMany();
+
+        const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        let totalRating = 0;
+        let totalReviews = 0;
+
+        ratingStats.forEach(stat => {
+            const rating = parseInt(stat.rating);
+            const count = parseInt(stat.count);
+            ratingDistribution[rating] = count;
+            totalRating += rating * count;
+            totalReviews += count;
+        });
+
+        const averageRating = totalReviews > 0 ? Math.round((totalRating / totalReviews) * 100) / 100 : 0;
+
+        return {
+            productId,
+            totalViews: parseInt(viewCount.count) || 0,
+            totalReviews: parseInt(reviewCount.count) || 0,
+            totalPurchases: parseInt(purchaseCount.count) || 0,
+            totalWishlists: parseInt(wishlistCount.count) || 0,
+            averageRating,
+            ratingDistribution
+        };
+    }
 }

@@ -5,6 +5,7 @@ import { ProductView } from './product-view.entity';
 import { OrderDetail } from './order-detail.entity';
 import { CartItem } from './cart-item.entity';
 import { ProductReview } from './product-review.entity';
+import { Wishlist } from './wishlist.entity';
 
 @Entity('products')
 export class Product {
@@ -55,6 +56,9 @@ export class Product {
     @OneToMany(() => ProductReview, productReview => productReview.product)
     reviews: ProductReview[];
 
+    @OneToMany(() => Wishlist, wishlist => wishlist.product)
+    wishlists: Wishlist[];
+
     // Virtual properties
     get discountedPrice(): number {
         return this.price * (1 - this.discountPercent / 100);
@@ -62,5 +66,28 @@ export class Product {
 
     get isInStock(): boolean {
         return this.stockQuantity > 0;
+    }
+
+    // Thống kê sản phẩm
+    get totalViews(): number {
+        return this.views?.length || 0;
+    }
+
+    get totalReviews(): number {
+        return this.reviews?.length || 0;
+    }
+
+    get totalPurchases(): number {
+        return this.orderDetails?.reduce((total, detail) => total + detail.quantity, 0) || 0;
+    }
+
+    get totalWishlists(): number {
+        return this.wishlists?.length || 0;
+    }
+
+    get averageRating(): number {
+        if (!this.reviews || this.reviews.length === 0) return 0;
+        const totalRating = this.reviews.reduce((sum, review) => sum + review.rating, 0);
+        return Math.round((totalRating / this.reviews.length) * 100) / 100;
     }
 }
