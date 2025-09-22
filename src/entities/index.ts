@@ -3,7 +3,13 @@ export { Category } from './category.entity';
 export { Product } from './product.entity';
 export { ProductImage } from './product-image.entity';
 export { ProductView } from './product-view.entity';
+<<<<<<< HEAD
 export { Order, OrderStatus, PaymentMethod, PaymentStatus } from './order.entity';
+=======
+export { Order} from './order.entity';
+export { OrderStatus } from './order-status.enum';
+export { OrderTracking } from './order-tracking.entity';
+>>>>>>> origin/main
 export { OrderDetail } from './order-detail.entity';
 export { Cart } from './cart.entity';
 export { CartItem } from './cart-item.entity';

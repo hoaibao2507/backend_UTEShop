@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch ,Body, Param, Query, UseGuards } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto, UpdateOrderDto, OrderQueryDto } from './dto/order.dto';
-import { OrderStatus } from '../entities/order.entity';
+import { OrderStatus } from '../entities/order-status.enum';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -104,4 +104,10 @@ export class OrderController {
     async remove(@Param('id') id: string) {
         return this.orderService.remove(+id);
     }
+
+    @Patch(':id/cancel')
+    @ApiOperation({ summary: 'Hủy đơn hàng (User)' })
+    async cancelOrder(@Param('id') id: string) {
+    return this.orderService.cancelOrder(+id);
+  }
 }

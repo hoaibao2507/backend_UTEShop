@@ -1,7 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../users/users.entity';
-import { OrderDetail } from '../entities/order-detail.entity';
+import { OrderDetail } from './order-detail.entity';
 import { OrderTracking } from './order-tracking.entity';
+<<<<<<< HEAD
 import { Payment } from './payment.entity';
 
 export enum OrderStatus {
@@ -11,6 +20,9 @@ export enum OrderStatus {
     COMPLETED = 'completed',
     CANCELLED = 'cancelled'
 }
+=======
+import { OrderStatus } from './order-status.enum';
+>>>>>>> origin/main
 
 export enum PaymentMethod {
     COD = 'COD',
@@ -28,25 +40,26 @@ export enum PaymentStatus {
 
 @Entity('orders')
 export class Order {
-    @PrimaryGeneratedColumn()
-    orderId: number;
+  @PrimaryGeneratedColumn()
+  orderId: number;
 
-    @Column()
-    userId: number;
+  @Column()
+  userId: number;
 
-    @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-    orderDate: Date;
+  @CreateDateColumn({ type: 'timestamp' })
+  orderDate: Date;
 
-    @Column({ type: 'decimal', precision: 15, scale: 2 })
-    totalAmount: number;
+  @Column({ type: 'decimal', precision: 15, scale: 2 })
+  totalAmount: number;
 
-    @Column({
-        type: 'enum',
-        enum: OrderStatus,
-        default: OrderStatus.PENDING
-    })
-    status: OrderStatus;
+  @Column({
+    type: 'enum',
+    enum: OrderStatus,
+    default: OrderStatus.NEW,
+  })
+  status: OrderStatus;
 
+<<<<<<< HEAD
     @Column({
         type: 'enum',
         enum: PaymentMethod,
@@ -71,13 +84,22 @@ export class Order {
     @ManyToOne(() => User, user => user.orders)
     @JoinColumn({ name: 'userId' })
     user: User;
+=======
+  // Quan hệ với user
+  @ManyToOne(() => User, (user) => user.orders)
+  @JoinColumn({ name: 'userId' })
+  user: User;
+>>>>>>> origin/main
 
-    @OneToMany(() => OrderDetail, orderDetail => orderDetail.order)
-    orderDetails: OrderDetail[];
+  // Quan hệ với chi tiết đơn hàng
+  @OneToMany(() => OrderDetail, (orderDetail) => orderDetail.order)
+  orderDetails: OrderDetail[];
 
-    @OneToMany(() => OrderTracking, (tracking) => tracking.order)
-    tracking: OrderTracking[];
+  // Quan hệ với lịch sử tracking
+  @OneToMany(() => OrderTracking, (tracking) => tracking.order)
+  tracking: OrderTracking[];
 
+<<<<<<< HEAD
     @OneToMany(() => Payment, payment => payment.order)
     payments: Payment[];
 
@@ -85,12 +107,20 @@ export class Order {
     get isCompleted(): boolean {
         return this.status === OrderStatus.COMPLETED;
     }
+=======
+  // Virtual helpers
+  get isDelivered(): boolean {
+    return this.status === OrderStatus.DELIVERED;
+  }
+>>>>>>> origin/main
 
-    get isCancelled(): boolean {
-        return this.status === OrderStatus.CANCELLED;
-    }
+  get isCanceled(): boolean {
+    return this.status === OrderStatus.CANCELED;
+  }
 
-    get canBeCancelled(): boolean {
-        return this.status === OrderStatus.PENDING || this.status === OrderStatus.PAID;
-    }
+  get canBeCanceled(): boolean {
+    return (
+      this.status === OrderStatus.NEW || this.status === OrderStatus.CONFIRMED
+    );
+  }
 }

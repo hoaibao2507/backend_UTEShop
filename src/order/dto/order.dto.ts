@@ -7,7 +7,11 @@ import {
   IsNotEmpty 
 } from 'class-validator';
 import { Type } from 'class-transformer';
+<<<<<<< HEAD
 import { OrderStatus, PaymentMethod, PaymentStatus } from '../../entities/order.entity';
+=======
+import { OrderStatus } from '../../entities/order-status.enum';
+>>>>>>> origin/main
 
 export class CreateOrderDto {
   @IsNumber()
