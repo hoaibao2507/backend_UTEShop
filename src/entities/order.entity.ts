@@ -10,19 +10,8 @@ import {
 import { User } from '../users/users.entity';
 import { OrderDetail } from './order-detail.entity';
 import { OrderTracking } from './order-tracking.entity';
-<<<<<<< HEAD
-import { Payment } from './payment.entity';
-
-export enum OrderStatus {
-    PENDING = 'pending',
-    PAID = 'paid',
-    SHIPPED = 'shipped',
-    COMPLETED = 'completed',
-    CANCELLED = 'cancelled'
-}
-=======
 import { OrderStatus } from './order-status.enum';
->>>>>>> origin/main
+import { Payment } from './payment.entity';
 
 export enum PaymentMethod {
     COD = 'COD',
@@ -59,37 +48,30 @@ export class Order {
   })
   status: OrderStatus;
 
-<<<<<<< HEAD
-    @Column({
-        type: 'enum',
-        enum: PaymentMethod,
-        default: PaymentMethod.COD
-    })
-    paymentMethod: PaymentMethod;
+  @Column({
+      type: 'enum',
+      enum: PaymentMethod,
+      default: PaymentMethod.COD
+  })
+  paymentMethod: PaymentMethod;
 
-    @Column({
-        type: 'enum',
-        enum: PaymentStatus,
-        default: PaymentStatus.PENDING
-    })
-    paymentStatus: PaymentStatus;
+  @Column({
+      type: 'enum',
+      enum: PaymentStatus,
+      default: PaymentStatus.PENDING
+  })
+  paymentStatus: PaymentStatus;
 
-    @Column({ type: 'text', nullable: true })
-    shippingAddress: string;
+  @Column({ type: 'text', nullable: true })
+  shippingAddress: string;
 
-    @Column({ type: 'text', nullable: true })
-    notes: string;
+  @Column({ type: 'text', nullable: true })
+  notes: string;
 
-    // Relations
-    @ManyToOne(() => User, user => user.orders)
-    @JoinColumn({ name: 'userId' })
-    user: User;
-=======
-  // Quan hệ với user
-  @ManyToOne(() => User, (user) => user.orders)
+  // Relations
+  @ManyToOne(() => User, user => user.orders)
   @JoinColumn({ name: 'userId' })
   user: User;
->>>>>>> origin/main
 
   // Quan hệ với chi tiết đơn hàng
   @OneToMany(() => OrderDetail, (orderDetail) => orderDetail.order)
@@ -99,20 +81,17 @@ export class Order {
   @OneToMany(() => OrderTracking, (tracking) => tracking.order)
   tracking: OrderTracking[];
 
-<<<<<<< HEAD
-    @OneToMany(() => Payment, payment => payment.order)
-    payments: Payment[];
+  @OneToMany(() => Payment, payment => payment.order)
+  payments: Payment[];
 
-    // Virtual properties
-    get isCompleted(): boolean {
-        return this.status === OrderStatus.COMPLETED;
-    }
-=======
-  // Virtual helpers
+  // Virtual properties
+  get isCompleted(): boolean {
+      return this.status === OrderStatus.DELIVERED;
+  }
+
   get isDelivered(): boolean {
     return this.status === OrderStatus.DELIVERED;
   }
->>>>>>> origin/main
 
   get isCanceled(): boolean {
     return this.status === OrderStatus.CANCELED;

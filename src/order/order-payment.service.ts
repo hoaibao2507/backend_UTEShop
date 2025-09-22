@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order, OrderStatus, PaymentMethod, PaymentStatus } from '../entities/order.entity';
+import { Order, PaymentMethod, PaymentStatus } from '../entities/order.entity';
+import { OrderStatus } from '../entities/order-status.enum';
 import { Payment } from '../entities/payment.entity';
 import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method.entity';
 import { Cart } from '../entities/cart.entity';
@@ -108,7 +109,7 @@ export class OrderPaymentService {
     const order = this.orderRepository.create({
       userId: createOrderDto.userId,
       totalAmount,
-      status: OrderStatus.PENDING,
+      status: OrderStatus.NEW,
       paymentMethod: paymentMethod.name as PaymentMethod,
       paymentStatus: PaymentStatus.PENDING,
       shippingAddress: createOrderDto.shippingAddress,
@@ -170,7 +171,7 @@ export class OrderPaymentService {
     // For COD, payment is considered successful when order is delivered
     // This would typically be called when delivery is confirmed
     order.paymentStatus = PaymentStatus.PAID;
-    order.status = OrderStatus.COMPLETED;
+    order.status = OrderStatus.DELIVERED;
 
     return this.orderRepository.save(order);
   }
@@ -184,16 +185,16 @@ export class OrderPaymentService {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
 
-    if (order.status === OrderStatus.COMPLETED) {
-      throw new BadRequestException('Cannot cancel completed order');
+    if (order.status === OrderStatus.DELIVERED) {
+      throw new BadRequestException('Cannot cancel delivered order');
     }
 
-    if (order.status === OrderStatus.CANCELLED) {
+    if (order.status === OrderStatus.CANCELED) {
       throw new BadRequestException('Order is already cancelled');
     }
 
     // Cancel order
-    order.status = OrderStatus.CANCELLED;
+    order.status = OrderStatus.CANCELED;
     order.paymentStatus = PaymentStatus.CANCELLED;
 
     // Restore inventory
