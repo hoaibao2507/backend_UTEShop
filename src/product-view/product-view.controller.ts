@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ProductViewService } from './product-view.service';
 import { CreateProductViewDto, ProductViewQueryDto } from './dto/product-view.dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
@@ -7,10 +7,11 @@ import { JwtAuthGuard } from '../auth/jwt.strategy';
 export class ProductViewController {
     constructor(private readonly productViewService: ProductViewService) {}
 
-    @Post()
-    async create(@Body() createProductViewDto: CreateProductViewDto) {
-        return this.productViewService.create(createProductViewDto);
-    }
+    // Vô hiệu hóa endpoint cũ để tránh duplicate tracking
+    // @Post()
+    // async create(@Body() createProductViewDto: CreateProductViewDto) {
+    //     return this.productViewService.create(createProductViewDto);
+    // }
 
     @Get()
     @UseGuards(JwtAuthGuard)
@@ -75,5 +76,24 @@ export class ProductViewController {
     @UseGuards(JwtAuthGuard)
     async removeByUserId(@Param('userId') userId: string) {
         return this.productViewService.removeByUserId(+userId);
+    }
+
+    /**
+     * Xóa tất cả product views (để test)
+     */
+    @Delete('clear-all')
+    @UseGuards(JwtAuthGuard)
+    async clearAllViews() {
+        return this.productViewService.clearAllViews();
+    }
+
+    /**
+     * Track lượt xem sản phẩm - 1 user = 1 lượt xem mỗi ngày
+     */
+    @Post('track/:productId')
+    @UseGuards(JwtAuthGuard)
+    async trackProductView(@Param('productId') productId: string, @Request() req) {
+        const userId = req.user.id; // Lấy user ID từ JWT token
+        return this.productViewService.trackView(userId, +productId);
     }
 }

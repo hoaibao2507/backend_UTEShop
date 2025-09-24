@@ -16,6 +16,10 @@ import { OrderTrackingModule } from './order-tracking/order-tracking.module';
 import { ProductReviewModule } from './product-review/product-review.module';
 import { ProductImageModule } from './product-image/product-image.module';
 import { ProductViewModule } from './product-view/product-view.module';
+import { PaymentMethodModule } from './payment-method/payment-method.module';
+import { PaymentModule } from './payment/payment.module';
+import { VoucherModule } from './voucher/voucher.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -53,6 +57,10 @@ import { join } from 'path';
     ProductReviewModule,
     ProductImageModule,
     ProductViewModule,
+    PaymentMethodModule,
+    PaymentModule,
+    VoucherModule,
+    WishlistModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

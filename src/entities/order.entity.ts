@@ -11,6 +11,21 @@ import { User } from '../users/users.entity';
 import { OrderDetail } from './order-detail.entity';
 import { OrderTracking } from './order-tracking.entity';
 import { OrderStatus } from './order-status.enum';
+import { Payment } from './payment.entity';
+
+export enum PaymentMethod {
+    COD = 'COD',
+    MOMO = 'MOMO',
+    ZALOPAY = 'ZALOPAY',
+    VNPAY = 'VNPAY'
+}
+
+export enum PaymentStatus {
+    PENDING = 'pending',
+    PAID = 'paid',
+    FAILED = 'failed',
+    CANCELLED = 'cancelled'
+}
 
 @Entity('orders')
 export class Order {
@@ -33,8 +48,28 @@ export class Order {
   })
   status: OrderStatus;
 
-  // Quan hệ với user
-  @ManyToOne(() => User, (user) => user.orders)
+  @Column({
+      type: 'enum',
+      enum: PaymentMethod,
+      default: PaymentMethod.COD
+  })
+  paymentMethod: PaymentMethod;
+
+  @Column({
+      type: 'enum',
+      enum: PaymentStatus,
+      default: PaymentStatus.PENDING
+  })
+  paymentStatus: PaymentStatus;
+
+  @Column({ type: 'text', nullable: true })
+  shippingAddress: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string;
+
+  // Relations
+  @ManyToOne(() => User, user => user.orders)
   @JoinColumn({ name: 'userId' })
   user: User;
 
@@ -46,7 +81,14 @@ export class Order {
   @OneToMany(() => OrderTracking, (tracking) => tracking.order)
   tracking: OrderTracking[];
 
-  // Virtual helpers
+  @OneToMany(() => Payment, payment => payment.order)
+  payments: Payment[];
+
+  // Virtual properties
+  get isCompleted(): boolean {
+      return this.status === OrderStatus.DELIVERED;
+  }
+
   get isDelivered(): boolean {
     return this.status === OrderStatus.DELIVERED;
   }

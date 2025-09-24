@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { ProductView } from '../entities/product-view.entity';
 import { CreateProductViewDto, ProductViewQueryDto } from './dto/product-view.dto';
 
@@ -175,5 +175,65 @@ export class ProductViewService {
             relations: ['product', 'user'],
             order: { viewedAt: 'DESC' },
         });
+    }
+
+    /**
+     * Xóa tất cả product views (để test)
+     */
+    async clearAllViews(): Promise<{ message: string; deletedCount: number }> {
+        const count = await this.productViewRepository.count();
+        await this.productViewRepository.delete({});
+        return {
+            message: 'All product views cleared successfully',
+            deletedCount: count
+        };
+    }
+
+    /**
+     * Track lượt xem sản phẩm với logic: 1 user = 1 lượt xem mỗi ngày
+     * @param userId ID của user
+     * @param productId ID của sản phẩm
+     * @returns Kết quả tracking
+     */
+    async trackView(userId: number, productId: number): Promise<{ tracked: boolean; message: string }> {
+        try {
+            // Lấy ngày hiện tại (chỉ lưu ngày, không lưu giờ)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Reset về 00:00:00
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            // Kiểm tra xem user đã xem sản phẩm này trong ngày hôm nay chưa
+            const existingView = await this.productViewRepository.findOne({
+                where: {
+                    userId,
+                    productId,
+                    viewedAt: Between(today, tomorrow)
+                }
+            });
+
+            if (existingView) {
+                return { 
+                    tracked: false, 
+                    message: 'View already tracked today for this user and product' 
+                };
+            }
+
+            // Tạo record mới
+            const productView = this.productViewRepository.create({
+                userId,
+                productId,
+                viewedAt: today,
+            });
+
+            await this.productViewRepository.save(productView);
+            
+            return { 
+                tracked: true, 
+                message: 'View tracked successfully' 
+            };
+        } catch (error) {
+            throw new BadRequestException('Failed to track product view');
+        }
     }
 }

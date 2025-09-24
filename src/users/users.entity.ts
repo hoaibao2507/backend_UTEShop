@@ -73,6 +73,9 @@ export class User {
     @OneToMany('ProductReview', 'user')
     reviews: any[];
 
+    @OneToMany('Wishlist', 'user')
+    wishlists: any[];
+
     // Virtual properties (not stored in database)
     get fullName(): string {
         return `${this.firstName} ${this.lastName}`.trim();

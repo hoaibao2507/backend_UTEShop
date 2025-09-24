@@ -42,6 +42,14 @@ export class ProductReviewController {
         return this.productReviewService.getProductRatingStats(+productId);
     }
 
+    @Get('stats/:productId')
+    @ApiOperation({ summary: 'Lấy thống kê đánh giá sản phẩm (alias)', description: 'Alias cho endpoint rating-stats, lấy thống kê đánh giá của một sản phẩm' })
+    @ApiResponse({ status: 200, description: 'Thống kê đánh giá sản phẩm được trả về thành công' })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
+    async getProductStats(@Param('productId') productId: string) {
+        return this.productReviewService.getProductRatingStats(+productId);
+    }
+
     @Get('user/:userId')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()

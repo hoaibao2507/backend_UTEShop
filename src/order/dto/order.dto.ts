@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderStatus } from '../../entities/order-status.enum';
+import { PaymentMethod, PaymentStatus } from '../../entities/order.entity';
 
 export class CreateOrderDto {
   @IsNumber()
@@ -24,6 +25,22 @@ export class CreateOrderDto {
   @IsEnum(OrderStatus)
   @IsOptional()
   status?: OrderStatus;
+
+  @IsEnum(PaymentMethod)
+  @IsOptional()
+  paymentMethod?: PaymentMethod;
+
+  @IsEnum(PaymentStatus)
+  @IsOptional()
+  paymentStatus?: PaymentStatus;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class UpdateOrderDto {
@@ -36,6 +53,22 @@ export class UpdateOrderDto {
   @Type(() => Number)
   @IsOptional()
   totalAmount?: number;
+
+  @IsEnum(PaymentMethod)
+  @IsOptional()
+  paymentMethod?: PaymentMethod;
+
+  @IsEnum(PaymentStatus)
+  @IsOptional()
+  paymentStatus?: PaymentStatus;
+
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class OrderQueryDto {
