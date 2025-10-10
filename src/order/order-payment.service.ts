@@ -112,7 +112,7 @@ export class OrderPaymentService {
       status: OrderStatus.NEW,
       paymentMethod: paymentMethod.name as PaymentMethod,
       paymentStatus: PaymentStatus.PENDING,
-      shippingAddress: createOrderDto.shippingAddress,
+      shippingAddress: createOrderDto.shippingInfo.shippingAddress,
       notes: createOrderDto.notes,
     });
 
