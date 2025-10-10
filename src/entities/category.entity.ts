@@ -12,6 +12,9 @@ export class Category {
     @Column({ type: 'text', nullable: true })
     description: string;
 
+    @Column({ type: 'int', default: 0 })
+    productCount: number;
+
     @CreateDateColumn()
     createdAt: Date;
 

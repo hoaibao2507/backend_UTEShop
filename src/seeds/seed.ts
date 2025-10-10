@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { seedAdmin } from './admin.seed';
 import { seedStaff } from './staff.seed';
 import { seedCustomer } from './customer.seed';
+import { seedVendor } from './vendor.seed';
 
 export async function runSeeds(dataSource: DataSource): Promise<void> {
   try {
@@ -15,6 +16,9 @@ export async function runSeeds(dataSource: DataSource): Promise<void> {
     
     // Run customer seed
     await seedCustomer(dataSource);
+    
+    // Run vendor seed
+    await seedVendor(dataSource);
     
     console.log('✅ Hoàn thành tất cả seeds!');
   } catch (error) {

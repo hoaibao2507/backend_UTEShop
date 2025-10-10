@@ -35,3 +35,4 @@ export async function seedAdmin(dataSource: DataSource): Promise<void> {
   console.log('   Email: admin@uteshop.com');
 }
 
+

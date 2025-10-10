@@ -63,4 +63,17 @@ export class CategoryController {
     async remove(@Param('id') id: string) {
         return this.categoryService.remove(+id);
     }
+
+    @Post('sync-product-counts')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Đồng bộ productCount', description: 'Đồng bộ productCount cho tất cả danh mục (yêu cầu xác thực)' })
+    @ApiResponse({ status: 200, description: 'Đồng bộ productCount thành công' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    async syncProductCounts() {
+        await this.categoryService.updateAllProductCounts();
+        return {
+            message: 'Đồng bộ productCount thành công cho tất cả danh mục',
+        };
+    }
 }
