@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../entities/category.entity';
+import { Product } from '../entities/product.entity';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
 @Injectable()
@@ -9,6 +10,8 @@ export class CategoryService {
     constructor(
         @InjectRepository(Category)
         private categoryRepository: Repository<Category>,
+        @InjectRepository(Product)
+        private productRepository: Repository<Product>,
     ) {}
 
     async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
@@ -27,8 +30,23 @@ export class CategoryService {
             order: { createdAt: 'DESC' },
         });
 
+        // Tính toán productCount cho từng category
+        const categoriesWithCount = await Promise.all(
+            categories.map(async (category) => {
+                const productCount = await this.productRepository
+                    .createQueryBuilder('product')
+                    .where('product.categoryId = :categoryId', { categoryId: category.categoryId })
+                    .getCount();
+
+                return {
+                    ...category,
+                    productCount,
+                };
+            })
+        );
+
         return {
-            categories,
+            categories: categoriesWithCount,
             total,
             page,
             limit,
@@ -44,7 +62,16 @@ export class CategoryService {
             throw new NotFoundException(`Category with ID ${id} not found`);
         }
 
-        return category;
+        // Tính toán productCount cho category
+        const productCount = await this.productRepository
+            .createQueryBuilder('product')
+            .where('product.categoryId = :categoryId', { categoryId: id })
+            .getCount();
+
+        return {
+            ...category,
+            productCount,
+        };
     }
 
     async findProductsByCategory(categoryId: number, page: number = 1, limit: number = 10) {
@@ -85,6 +112,30 @@ export class CategoryService {
             await this.categoryRepository.remove(category);
         } catch (error) {
             throw new BadRequestException('Cannot delete category with existing products');
+        }
+    }
+
+    // Method để cập nhật productCount trong database
+    async updateProductCount(categoryId: number): Promise<void> {
+        const productCount = await this.productRepository
+            .createQueryBuilder('product')
+            .where('product.categoryId = :categoryId', { categoryId })
+            .getCount();
+
+        await this.categoryRepository
+            .createQueryBuilder()
+            .update(Category)
+            .set({ productCount })
+            .where('categoryId = :categoryId', { categoryId })
+            .execute();
+    }
+
+    // Method để cập nhật productCount cho tất cả categories
+    async updateAllProductCounts(): Promise<void> {
+        const categories = await this.categoryRepository.find();
+        
+        for (const category of categories) {
+            await this.updateProductCount(category.categoryId);
         }
     }
 }

@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/product.dto';
+import { CategoryService } from '../category/category.service';
 
 @Injectable()
 export class ProductService {
     constructor(
         @InjectRepository(Product)
         private productRepository: Repository<Product>,
+        @Inject(forwardRef(() => CategoryService))
+        private categoryService: CategoryService,
     ) {}
 
     async create(createProductDto: CreateProductDto): Promise<Product> {
@@ -18,7 +21,12 @@ export class ProductService {
                 discountPercent: createProductDto.discountPercent || 0,
                 stockQuantity: createProductDto.stockQuantity || 0,
             });
-            return await this.productRepository.save(product);
+            const savedProduct = await this.productRepository.save(product);
+            
+            // Cập nhật productCount cho category
+            await this.categoryService.updateProductCount(savedProduct.categoryId);
+            
+            return savedProduct;
         } catch (error) {
             throw new BadRequestException('Failed to create product');
         }
@@ -83,10 +91,19 @@ export class ProductService {
 
     async update(id: number, updateProductDto: UpdateProductDto): Promise<Product> {
         const product = await this.findOne(id);
+        const oldCategoryId = product.categoryId;
         
         try {
             Object.assign(product, updateProductDto);
-            return await this.productRepository.save(product);
+            const updatedProduct = await this.productRepository.save(product);
+            
+            // Cập nhật productCount cho category cũ và mới (nếu có thay đổi)
+            await this.categoryService.updateProductCount(oldCategoryId);
+            if (updateProductDto.categoryId && updateProductDto.categoryId !== oldCategoryId) {
+                await this.categoryService.updateProductCount(updateProductDto.categoryId);
+            }
+            
+            return updatedProduct;
         } catch (error) {
             throw new BadRequestException('Failed to update product');
         }
@@ -94,9 +111,13 @@ export class ProductService {
 
     async remove(id: number): Promise<void> {
         const product = await this.findOne(id);
+        const categoryId = product.categoryId;
         
         try {
             await this.productRepository.remove(product);
+            
+            // Cập nhật productCount cho category sau khi xóa
+            await this.categoryService.updateProductCount(categoryId);
         } catch (error) {
             throw new BadRequestException('Cannot delete product with existing orders or cart items');
         }
