@@ -20,6 +20,9 @@ import { PaymentMethodModule } from './payment-method/payment-method.module';
 import { PaymentModule } from './payment/payment.module';
 import { VoucherModule } from './voucher/voucher.module';
 import { WishlistModule } from './wishlist/wishlist.module';
+import { VendorModule } from './vendor/vendor.module';
+import { AdminModule } from './admin/admin.module';
+import { StaffModule } from './staff/staff.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -61,6 +64,9 @@ import { join } from 'path';
     PaymentModule,
     VoucherModule,
     WishlistModule,
+    VendorModule,
+    AdminModule,
+    StaffModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

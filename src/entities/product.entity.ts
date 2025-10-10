@@ -6,6 +6,7 @@ import { OrderDetail } from './order-detail.entity';
 import { CartItem } from './cart-item.entity';
 import { ProductReview } from './product-review.entity';
 import { Wishlist } from './wishlist.entity';
+import { Vendor } from './vendor.entity';
 
 @Entity('products')
 export class Product {
@@ -14,6 +15,9 @@ export class Product {
 
     @Column()
     categoryId: number;
+
+    @Column({ nullable: true })
+    vendorId?: number;
 
     @Column({ length: 200 })
     productName: string;
@@ -40,6 +44,10 @@ export class Product {
     @ManyToOne(() => Category, category => category.products)
     @JoinColumn({ name: 'categoryId' })
     category: Category;
+
+    @ManyToOne(() => Vendor, vendor => vendor.products)
+    @JoinColumn({ name: 'vendorId' })
+    vendor?: Vendor;
 
     @OneToMany(() => ProductImage, productImage => productImage.product)
     images: ProductImage[];

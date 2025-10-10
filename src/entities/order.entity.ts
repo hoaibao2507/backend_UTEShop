@@ -12,6 +12,7 @@ import { OrderDetail } from './order-detail.entity';
 import { OrderTracking } from './order-tracking.entity';
 import { OrderStatus } from './order-status.enum';
 import { Payment } from './payment.entity';
+import { Vendor } from './vendor.entity';
 
 export enum PaymentMethod {
     COD = 'COD',
@@ -34,6 +35,9 @@ export class Order {
 
   @Column()
   userId: number;
+
+  @Column({ nullable: true })
+  vendorId?: number;
 
   @CreateDateColumn({ type: 'timestamp' })
   orderDate: Date;
@@ -72,6 +76,10 @@ export class Order {
   @ManyToOne(() => User, user => user.orders)
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  @ManyToOne(() => Vendor, vendor => vendor.orders)
+  @JoinColumn({ name: 'vendorId' })
+  vendor?: Vendor;
 
   // Quan hệ với chi tiết đơn hàng
   @OneToMany(() => OrderDetail, (orderDetail) => orderDetail.order)
