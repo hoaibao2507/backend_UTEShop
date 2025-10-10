@@ -197,18 +197,21 @@ export class ProductViewService {
      */
     async trackView(userId: number, productId: number): Promise<{ tracked: boolean; message: string }> {
         try {
-            // Lấy ngày hiện tại (chỉ lưu ngày, không lưu giờ)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0); // Reset về 00:00:00
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
+            // Lấy thời gian hiện tại (bao gồm cả giờ, phút, giây)
+            const now = new Date();
+            
+            // Tạo ngày bắt đầu và kết thúc của ngày hiện tại để kiểm tra duplicate
+            const todayStart = new Date(now);
+            todayStart.setHours(0, 0, 0, 0); // 00:00:00
+            const todayEnd = new Date(now);
+            todayEnd.setHours(23, 59, 59, 999); // 23:59:59.999
 
             // Kiểm tra xem user đã xem sản phẩm này trong ngày hôm nay chưa
             const existingView = await this.productViewRepository.findOne({
                 where: {
                     userId,
                     productId,
-                    viewedAt: Between(today, tomorrow)
+                    viewedAt: Between(todayStart, todayEnd)
                 }
             });
 
@@ -219,11 +222,11 @@ export class ProductViewService {
                 };
             }
 
-            // Tạo record mới
+            // Tạo record mới với thời gian thực
             const productView = this.productViewRepository.create({
                 userId,
                 productId,
-                viewedAt: today,
+                viewedAt: now, // Lưu thời gian thực
             });
 
             await this.productViewRepository.save(productView);
