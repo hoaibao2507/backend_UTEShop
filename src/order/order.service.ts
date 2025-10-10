@@ -1,10 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException , ForbiddenException} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Order} from '../entities/order.entity';
+import { Repository, DataSource } from 'typeorm';
+import { Order, PaymentMethod as PaymentMethodEnum, PaymentStatus} from '../entities/order.entity';
+import { OrderDetail } from '../entities/order-detail.entity';
 import { OrderTracking } from '../entities/order-tracking.entity';
 import { OrderStatus } from '../entities/order-status.enum';
 import { CreateOrderDto, UpdateOrderDto, OrderQueryDto } from './dto/order.dto';
+import { Cart } from '../entities/cart.entity';
+import { CartItem } from '../entities/cart-item.entity';
+import { Product } from '../entities/product.entity';
+import { PaymentMethod } from '../entities/payment-method.entity';
 
 @Injectable()
 export class OrderService {
@@ -12,18 +17,167 @@ export class OrderService {
         @InjectRepository(Order)
         private orderRepository: Repository<Order>,
         @InjectRepository(OrderTracking)
-    private trackingRepository: Repository<OrderTracking>,
+        private trackingRepository: Repository<OrderTracking>,
+        @InjectRepository(OrderDetail)
+        private orderDetailRepository: Repository<OrderDetail>,
+        @InjectRepository(Cart)
+        private cartRepository: Repository<Cart>,
+        @InjectRepository(CartItem)
+        private cartItemRepository: Repository<CartItem>,
+        @InjectRepository(Product)
+        private productRepository: Repository<Product>,
+        @InjectRepository(PaymentMethod)
+        private paymentMethodRepository: Repository<PaymentMethod>,
+        private dataSource: DataSource,
     ) {}
 
     async create(createOrderDto: CreateOrderDto): Promise<Order> {
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+
         try {
-            const order = this.orderRepository.create({
-                ...createOrderDto,
-                status: createOrderDto.status || OrderStatus.NEW,
+            // 1. Validate cart exists
+            const cart = await this.cartRepository.findOne({
+                where: { cartId: createOrderDto.cartId },
+                relations: ['user'],
             });
-            return await this.orderRepository.save(order);
+
+            if (!cart) {
+                throw new NotFoundException('Cart not found');
+            }
+
+            // 2. Validate payment method
+            const paymentMethod = await this.paymentMethodRepository.findOne({
+                where: { id: createOrderDto.paymentMethodId },
+            });
+
+            if (!paymentMethod) {
+                throw new NotFoundException('Payment method not found');
+            }
+
+            // 3. Validate selected items and calculate total
+            let totalAmount = 0;
+            const orderDetailsData: Array<{
+                productId: number;
+                quantity: number;
+                unitPrice: number;
+            }> = [];
+
+            for (const item of createOrderDto.selectedItems) {
+                // Validate cart item belongs to this cart
+                const cartItem = await this.cartItemRepository.findOne({
+                    where: { 
+                        cartItemId: item.cartItemId,
+                        cartId: createOrderDto.cartId 
+                    },
+                });
+
+                if (!cartItem) {
+                    throw new BadRequestException(`Cart item ${item.cartItemId} not found or doesn't belong to this cart`);
+                }
+
+                // Validate product exists and has enough stock
+                const product = await this.productRepository.findOne({
+                    where: { productId: item.productId },
+                });
+
+                if (!product) {
+                    throw new NotFoundException(`Product ${item.productId} not found`);
+                }
+
+                if (product.stockQuantity < item.quantity) {
+                    throw new BadRequestException(`Product ${product.productName} doesn't have enough stock`);
+                }
+
+                // Calculate item total
+                const itemTotal = item.price * item.quantity;
+                totalAmount += itemTotal;
+
+                orderDetailsData.push({
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    unitPrice: item.price,
+                });
+            }
+
+            // 4. Map payment method name to enum
+            let paymentMethodEnum: PaymentMethodEnum;
+            switch (paymentMethod.name.toUpperCase()) {
+                case 'COD':
+                    paymentMethodEnum = PaymentMethodEnum.COD;
+                    break;
+                case 'MOMO':
+                    paymentMethodEnum = PaymentMethodEnum.MOMO;
+                    break;
+                case 'ZALOPAY':
+                    paymentMethodEnum = PaymentMethodEnum.ZALOPAY;
+                    break;
+                case 'VNPAY':
+                    paymentMethodEnum = PaymentMethodEnum.VNPAY;
+                    break;
+                default:
+                    paymentMethodEnum = PaymentMethodEnum.COD;
+            }
+
+            // 5. Create order
+            const shippingAddress = `${createOrderDto.shippingInfo.shippingAddress}, ${createOrderDto.shippingInfo.ward}, ${createOrderDto.shippingInfo.city}`;
+            
+            const order = this.orderRepository.create({
+                userId: cart.userId,
+                totalAmount,
+                status: OrderStatus.NEW,
+                paymentMethod: paymentMethodEnum,
+                paymentStatus: paymentMethodEnum === PaymentMethodEnum.COD ? PaymentStatus.PENDING : PaymentStatus.PENDING,
+                shippingAddress,
+                notes: createOrderDto.notes || createOrderDto.shippingInfo.notes || '',
+            });
+
+            const savedOrder = await queryRunner.manager.save(order);
+
+            // 6. Create order details
+            for (const detailData of orderDetailsData) {
+                const orderDetail = this.orderDetailRepository.create({
+                    orderId: savedOrder.orderId,
+                    ...detailData,
+                });
+                await queryRunner.manager.save(orderDetail);
+
+                // Update product stock
+                await queryRunner.manager.decrement(
+                    Product,
+                    { productId: detailData.productId },
+                    'stockQuantity',
+                    detailData.quantity
+                );
+            }
+
+            // 7. Create order tracking
+            const tracking = this.trackingRepository.create({
+                order: savedOrder,
+                status: OrderStatus.NEW,
+                note: 'Đơn hàng đã được tạo',
+            });
+            await queryRunner.manager.save(tracking);
+
+            // 8. Remove selected items from cart
+            for (const item of createOrderDto.selectedItems) {
+                await queryRunner.manager.delete(CartItem, { cartItemId: item.cartItemId });
+            }
+
+            await queryRunner.commitTransaction();
+
+            // Return order with relations
+            return await this.findOne(savedOrder.orderId);
         } catch (error) {
-            throw new BadRequestException('Failed to create order');
+            await queryRunner.rollbackTransaction();
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+            console.error('Error creating order:', error);
+            throw new BadRequestException('Failed to create order: ' + error.message);
+        } finally {
+            await queryRunner.release();
         }
     }
 

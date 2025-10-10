@@ -6,6 +6,12 @@ export enum Gender {
     OTHER = 'other'
 }
 
+export enum UserRole {
+    CUSTOMER = 'customer',
+    STAFF = 'staff',
+    MANAGER = 'manager'
+}
+
 @Entity()
 export class User {
     @PrimaryGeneratedColumn()
@@ -57,6 +63,19 @@ export class User {
     @Column({ nullable: true })
     avatar: string;
 
+    @Column({
+        type: 'enum',
+        enum: UserRole,
+        default: UserRole.CUSTOMER
+    })
+    role: UserRole;
+
+    @Column({ default: true })
+    isActive: boolean;
+
+    @Column({ nullable: true })
+    lastLoginAt: Date;
+
     @CreateDateColumn()
     createdAt: Date;
 
@@ -93,5 +112,29 @@ export class User {
         }
         
         return age;
+    }
+
+    get isStaff(): boolean {
+        return this.role === UserRole.STAFF;
+    }
+
+    get isManager(): boolean {
+        return this.role === UserRole.MANAGER;
+    }
+
+    get isCustomer(): boolean {
+        return this.role === UserRole.CUSTOMER;
+    }
+
+    get canManageOrders(): boolean {
+        return this.role === UserRole.STAFF || this.role === UserRole.MANAGER;
+    }
+
+    get canManageProducts(): boolean {
+        return this.role === UserRole.STAFF || this.role === UserRole.MANAGER;
+    }
+
+    get canViewReports(): boolean {
+        return this.role === UserRole.MANAGER;
     }
 }
