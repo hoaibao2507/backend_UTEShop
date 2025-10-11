@@ -9,9 +9,12 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
-  Query
+  Query,
+  UseInterceptors,
+  UploadedFile
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { StaffService } from './staff.service';
 import { StaffCreateDto, StaffUpdateDto, StaffChangePasswordDto, StaffQueryDto } from './dto/staff.dto';
 import { StaffAuthGuard } from './guards/staff-auth.guard';
@@ -29,12 +32,17 @@ export class StaffController {
   @Post()
   @UseGuards(StaffRoleGuard)
   @Roles(UserRole.MANAGER)
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Tạo staff mới', description: 'Chỉ Manager mới có thể tạo staff mới' })
   @ApiResponse({ status: 201, description: 'Tạo staff thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
   @ApiResponse({ status: 409, description: 'Email hoặc phone đã được sử dụng' })
-  async create(@Body() staffCreateDto: StaffCreateDto) {
-    const staff = await this.staffService.create(staffCreateDto);
+  async create(
+    @Body() staffCreateDto: StaffCreateDto,
+    @UploadedFile() avatar?: Express.Multer.File
+  ) {
+    const staff = await this.staffService.create(staffCreateDto, avatar);
     return {
       message: 'Tạo staff thành công',
       staff: {
@@ -102,11 +110,17 @@ export class StaffController {
   }
 
   @Patch('profile')
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Cập nhật profile', description: 'Cập nhật thông tin profile của staff hiện tại' })
   @ApiResponse({ status: 200, description: 'Cập nhật profile thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
-  async updateProfile(@Request() req, @Body() staffUpdateDto: StaffUpdateDto) {
-    const staff = await this.staffService.update(req.user.id, staffUpdateDto);
+  async updateProfile(
+    @Request() req, 
+    @Body() staffUpdateDto: StaffUpdateDto,
+    @UploadedFile() avatar?: Express.Multer.File
+  ) {
+    const staff = await this.staffService.update(req.user.id, staffUpdateDto, avatar);
     return {
       message: 'Cập nhật profile thành công',
       staff: {
@@ -124,12 +138,18 @@ export class StaffController {
   @Patch(':id')
   @UseGuards(StaffRoleGuard)
   @Roles(UserRole.MANAGER)
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Cập nhật staff', description: 'Cập nhật thông tin staff (Manager only)' })
   @ApiResponse({ status: 200, description: 'Cập nhật staff thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy staff' })
-  async update(@Param('id', ParseIntPipe) id: number, @Body() staffUpdateDto: StaffUpdateDto) {
-    const staff = await this.staffService.update(id, staffUpdateDto);
+  async update(
+    @Param('id', ParseIntPipe) id: number, 
+    @Body() staffUpdateDto: StaffUpdateDto,
+    @UploadedFile() avatar?: Express.Multer.File
+  ) {
+    const staff = await this.staffService.update(id, staffUpdateDto, avatar);
     return {
       message: 'Cập nhật staff thành công',
       staff: {
@@ -189,5 +209,6 @@ export class StaffController {
     };
   }
 }
+
 
 

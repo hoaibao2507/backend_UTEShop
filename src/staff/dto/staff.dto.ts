@@ -5,9 +5,11 @@ import {
   IsNotEmpty, 
   Length,
   IsEnum,
-  MinLength
+  MinLength,
+  IsBoolean,
+  IsDateString
 } from 'class-validator';
-import { UserRole } from '../../users/users.entity';
+import { UserRole, Gender } from '../../users/users.entity';
 
 export class StaffCreateDto {
   @IsString()
@@ -39,6 +41,14 @@ export class StaffCreateDto {
   @Length(2, 100)
   city?: string;
 
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
+
+  @IsDateString()
+  @IsOptional()
+  dateOfBirth?: string;
+
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
@@ -47,6 +57,10 @@ export class StaffCreateDto {
   @IsEnum(UserRole)
   @IsOptional()
   role?: UserRole;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class StaffUpdateDto {
@@ -79,13 +93,30 @@ export class StaffUpdateDto {
   @Length(2, 100)
   city?: string;
 
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
+
+  @IsDateString()
+  @IsOptional()
+  dateOfBirth?: string;
+
   @IsString()
   @IsOptional()
   avatar?: string;
 
+  @IsString()
+  @IsOptional()
+  @MinLength(6)
+  password?: string;
+
   @IsEnum(UserRole)
   @IsOptional()
   role?: UserRole;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class StaffChangePasswordDto {
@@ -111,5 +142,6 @@ export class StaffQueryDto {
   @Length(1, 100)
   search?: string;
 }
+
 
 

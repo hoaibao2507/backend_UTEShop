@@ -37,3 +37,4 @@ export async function syncProductCounts(dataSource: DataSource) {
         throw error;
     }
 }
+

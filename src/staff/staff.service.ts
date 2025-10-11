@@ -4,6 +4,8 @@ import { Repository, In } from 'typeorm';
 import { User, UserRole } from '../users/users.entity';
 import { StaffCreateDto, StaffUpdateDto, StaffChangePasswordDto, StaffQueryDto } from './dto/staff.dto';
 import * as bcrypt from 'bcrypt';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class StaffService {
@@ -12,7 +14,7 @@ export class StaffService {
     private userRepository: Repository<User>,
   ) {}
 
-  async create(staffCreateDto: StaffCreateDto): Promise<User> {
+  async create(staffCreateDto: StaffCreateDto, avatar?: Express.Multer.File): Promise<User> {
     // Check if email already exists
     const existingUserByEmail = await this.userRepository.findOne({ 
       where: { email: staffCreateDto.email } 
@@ -34,16 +36,31 @@ export class StaffService {
     // Hash password
     const hashedPassword = await bcrypt.hash(staffCreateDto.password, 10);
 
+    // Handle avatar upload
+    let avatarPath: string | undefined = undefined;
+    if (avatar) {
+      avatarPath = await this.saveAvatar(avatar);
+    }
+
     // Create staff user
-    const user = this.userRepository.create({
-      ...staffCreateDto,
+    const userData: any = {
+      firstName: staffCreateDto.firstName,
+      lastName: staffCreateDto.lastName,
+      email: staffCreateDto.email,
+      phone: staffCreateDto.phone,
+      address: staffCreateDto.address,
+      city: staffCreateDto.city,
+      gender: staffCreateDto.gender,
       password: hashedPassword,
       role: staffCreateDto.role || UserRole.STAFF,
-      isActive: true,
+      isActive: staffCreateDto.isActive !== undefined ? staffCreateDto.isActive : true,
       isVerified: true, // Staff accounts are auto-verified
-    });
+      avatar: avatarPath,
+      dateOfBirth: staffCreateDto.dateOfBirth ? new Date(staffCreateDto.dateOfBirth) : undefined,
+    };
 
-    return await this.userRepository.save(user);
+    const user = this.userRepository.create(userData);
+    return await this.userRepository.save(user) as unknown as User;
   }
 
   async findAll(query: StaffQueryDto): Promise<User[]> {
@@ -108,7 +125,7 @@ export class StaffService {
     });
   }
 
-  async update(id: number, staffUpdateDto: StaffUpdateDto): Promise<User> {
+  async update(id: number, staffUpdateDto: StaffUpdateDto, avatar?: Express.Multer.File): Promise<User> {
     const user = await this.findOne(id);
 
     // Check if email already exists (if changing email)
@@ -131,8 +148,30 @@ export class StaffService {
       }
     }
 
+    // Handle avatar upload
+    if (avatar) {
+      // Delete old avatar if exists
+      if (user.avatar) {
+        await this.deleteAvatar(user.avatar);
+      }
+      user.avatar = await this.saveAvatar(avatar);
+    }
+
     try {
-      Object.assign(user, staffUpdateDto);
+      // Handle dateOfBirth conversion
+      const updateData = { ...staffUpdateDto };
+      if (updateData.dateOfBirth) {
+        updateData.dateOfBirth = new Date(updateData.dateOfBirth) as any;
+      }
+
+      // Handle password if provided
+      if (updateData.password) {
+        const hashedPassword = await bcrypt.hash(updateData.password, 10);
+        user.password = hashedPassword;
+        delete updateData.password; // Remove password from updateData to avoid overwriting
+      }
+
+      Object.assign(user, updateData);
       return await this.userRepository.save(user);
     } catch (error) {
       throw new BadRequestException('Failed to update staff');
@@ -171,10 +210,46 @@ export class StaffService {
   async remove(id: number): Promise<void> {
     const user = await this.findOne(id);
 
+    // Delete avatar if exists
+    if (user.avatar) {
+      await this.deleteAvatar(user.avatar);
+    }
+
     try {
       await this.userRepository.remove(user);
     } catch (error) {
       throw new BadRequestException('Failed to delete staff');
+    }
+  }
+
+  // File upload methods
+  private async saveAvatar(file: Express.Multer.File): Promise<string> {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Generate unique filename
+    const fileExtension = path.extname(file.originalname);
+    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExtension}`;
+    const filePath = path.join(uploadDir, fileName);
+
+    // Save file
+    fs.writeFileSync(filePath, file.buffer);
+
+    // Return relative path for database storage
+    return `avatars/${fileName}`;
+  }
+
+  private async deleteAvatar(avatarPath: string): Promise<void> {
+    if (!avatarPath) return;
+    
+    const fullPath = path.join(process.cwd(), 'uploads', avatarPath);
+    
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
     }
   }
 

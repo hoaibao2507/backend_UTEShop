@@ -33,7 +33,8 @@ export class VendorAuthService {
       username: vendor.username, 
       email: vendor.email,
       storeName: vendor.storeName,
-      role: 'vendor'
+      role: 'vendor',
+      type: 'vendor'
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -72,7 +73,8 @@ export class VendorAuthService {
       username: vendor.username, 
       email: vendor.email,
       storeName: vendor.storeName,
-      role: 'vendor'
+      role: 'vendor',
+      type: 'vendor'
     };
 
     const newAccessToken = this.jwtService.sign(payload, {
@@ -85,5 +87,6 @@ export class VendorAuthService {
     };
   }
 }
+
 
 

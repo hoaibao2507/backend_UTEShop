@@ -1,16 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { StaffService } from '../staff.service';
+import { VendorService } from '../vendor.service';
 import { AdminService } from '../../admin/admin.service';
-import { VendorService } from '../../vendor/vendor.service';
 
 @Injectable()
-export class StaffAuthGuard implements CanActivate {
+export class VendorAuthGuard implements CanActivate {
   constructor(
     private jwtService: JwtService,
-    private staffService: StaffService,
-    private adminService: AdminService,
     private vendorService: VendorService,
+    private adminService: AdminService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -26,21 +24,21 @@ export class StaffAuthGuard implements CanActivate {
         secret: process.env.JWT_SECRET,
       });
 
-      // Check if token is for staff, admin, or vendor
-      if (payload.type === 'staff') {
-        // Verify staff exists and is active
-        const staff = await this.staffService.findOne(payload.sub);
-        if (!staff.isActive) {
-          throw new UnauthorizedException('Tài khoản staff đã bị vô hiệu hóa');
+      // Check if token is for vendor or admin
+      if (payload.type === 'vendor' || payload.role === 'vendor') {
+        // Verify vendor exists and is active
+        const vendor = await this.vendorService.findOne(payload.vendorId);
+        if (!vendor || vendor.status !== 'active') {
+          throw new UnauthorizedException('Tài khoản vendor đã bị vô hiệu hóa hoặc chưa được duyệt');
         }
 
         request['user'] = {
-          id: payload.sub,
+          vendorId: payload.vendorId,
+          username: payload.username,
           email: payload.email,
-          firstName: payload.firstName,
-          lastName: payload.lastName,
-          role: payload.role,
-          type: 'staff',
+          storeName: payload.storeName,
+          role: 'vendor',
+          type: 'vendor',
         };
       } else if (payload.type === 'admin') {
         // Verify admin exists and is active
@@ -56,23 +54,8 @@ export class StaffAuthGuard implements CanActivate {
           role: payload.role,
           type: 'admin',
         };
-      } else if (payload.type === 'vendor' || payload.role === 'vendor') {
-        // Verify vendor exists and is active
-        const vendor = await this.vendorService.findOne(payload.vendorId);
-        if (!vendor || vendor.status !== 'active') {
-          throw new UnauthorizedException('Tài khoản vendor đã bị vô hiệu hóa hoặc chưa được duyệt');
-        }
-
-        request['user'] = {
-          vendorId: payload.vendorId,
-          username: payload.username,
-          email: payload.email,
-          storeName: payload.storeName,
-          role: 'vendor',
-          type: 'vendor',
-        };
       } else {
-        throw new UnauthorizedException('Token không hợp lệ cho staff, admin hoặc vendor');
+        throw new UnauthorizedException('Token không hợp lệ cho vendor hoặc admin');
       }
     } catch (error) {
       throw new UnauthorizedException('Token không hợp lệ');
@@ -86,6 +69,3 @@ export class StaffAuthGuard implements CanActivate {
     return type === 'Bearer' ? token : undefined;
   }
 }
-
-
-
