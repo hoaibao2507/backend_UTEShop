@@ -15,12 +15,12 @@ export class UsersController {
 
     @Get('getAll')
     @ApiOperation({ 
-        summary: 'Lấy danh sách tất cả người dùng', 
-        description: 'Lấy danh sách tất cả người dùng trong hệ thống (chỉ dành cho admin)' 
+        summary: 'Lấy danh sách khách hàng', 
+        description: 'Lấy danh sách tất cả khách hàng (customer) trong hệ thống (chỉ dành cho admin)' 
     })
     @ApiResponse({ 
         status: 200, 
-        description: 'Danh sách tất cả người dùng được trả về thành công',
+        description: 'Danh sách khách hàng được trả về thành công',
         schema: {
             type: 'array',
             items: {
