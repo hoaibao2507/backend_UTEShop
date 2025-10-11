@@ -43,3 +43,4 @@ export async function seedVendor(dataSource: DataSource): Promise<void> {
   console.log('   Store: Cửa hàng điện tử ABC');
   console.log('   Status: ACTIVE');
 }
+

@@ -21,7 +21,8 @@ import {
   VendorLoginDto
 } from './dto/vendor.dto';
 import { VendorStatus } from '../entities/vendor.entity';
-import { JwtAuthGuard } from '../auth/jwt.strategy';
+import { VendorAuthGuard } from './guards/vendor-auth.guard';
+import { VendorRoleGuard } from './guards/vendor-role.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('vendors')
@@ -60,7 +61,7 @@ export class VendorController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy danh sách nhà cung cấp', description: 'Lấy danh sách tất cả nhà cung cấp với phân trang và bộ lọc (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Danh sách nhà cung cấp được trả về thành công' })
@@ -70,7 +71,7 @@ export class VendorController {
   }
 
   @Get('pending')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy danh sách nhà cung cấp chờ duyệt', description: 'Lấy danh sách nhà cung cấp đang chờ duyệt (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Danh sách nhà cung cấp chờ duyệt được trả về thành công' })
@@ -84,7 +85,7 @@ export class VendorController {
   }
 
   @Get('statistics')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thống kê nhà cung cấp', description: 'Lấy thống kê tổng quan về nhà cung cấp (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Thống kê nhà cung cấp được trả về thành công' })
@@ -94,7 +95,7 @@ export class VendorController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thông tin nhà cung cấp', description: 'Lấy thông tin chi tiết của một nhà cung cấp (yêu cầu xác thực)' })
   @ApiResponse({ status: 200, description: 'Thông tin nhà cung cấp được trả về thành công' })
@@ -105,7 +106,7 @@ export class VendorController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật thông tin nhà cung cấp', description: 'Cập nhật thông tin của một nhà cung cấp (yêu cầu xác thực)' })
   @ApiResponse({ status: 200, description: 'Thông tin nhà cung cấp được cập nhật thành công' })
@@ -116,7 +117,7 @@ export class VendorController {
   }
 
   @Put(':id/approve')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Duyệt nhà cung cấp', description: 'Duyệt hoặc từ chối đăng ký nhà cung cấp (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Nhà cung cấp được duyệt thành công' })
@@ -124,13 +125,13 @@ export class VendorController {
   @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy nhà cung cấp' })
   async approve(@Param('id', ParseIntPipe) id: number, @Body() approvalDto: VendorApprovalDto, @Request() req) {
-    const adminId = req.user.id;
+    const adminId = req.user.adminId || req.user.id;
     approvalDto.adminId = adminId;
     return this.vendorService.approve(id, approvalDto);
   }
 
   @Put(':id/suspend')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Tạm ngưng nhà cung cấp', description: 'Tạm ngưng hoạt động của nhà cung cấp (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Nhà cung cấp được tạm ngưng thành công' })
@@ -138,12 +139,12 @@ export class VendorController {
   @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy nhà cung cấp' })
   async suspend(@Param('id', ParseIntPipe) id: number, @Body('reason') reason: string, @Request() req) {
-    const adminId = req.user.id;
+    const adminId = req.user.adminId || req.user.id;
     return this.vendorService.suspend(id, adminId, reason);
   }
 
   @Put(':id/activate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Kích hoạt nhà cung cấp', description: 'Kích hoạt lại nhà cung cấp đã bị tạm ngưng (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Nhà cung cấp được kích hoạt thành công' })
@@ -151,12 +152,12 @@ export class VendorController {
   @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy nhà cung cấp' })
   async activate(@Param('id', ParseIntPipe) id: number, @Request() req) {
-    const adminId = req.user.id;
+    const adminId = req.user.adminId || req.user.id;
     return this.vendorService.activate(id, adminId);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(VendorAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Xóa nhà cung cấp', description: 'Xóa một nhà cung cấp khỏi hệ thống (yêu cầu xác thực admin)' })
   @ApiResponse({ status: 200, description: 'Nhà cung cấp được xóa thành công' })
