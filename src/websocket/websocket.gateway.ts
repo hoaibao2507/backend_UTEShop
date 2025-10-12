@@ -97,6 +97,18 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       
       // Join role-specific room
       client.join(`${authenticatedSocket.userType}s`);
+      
+      // Join specific role rooms based on user type
+      if (authenticatedSocket.userType === 'customer') {
+        client.join(`customer_${authenticatedSocket.userId}`);
+      } else if (authenticatedSocket.userType === 'staff') {
+        client.join(`staff_${authenticatedSocket.userId}`);
+        client.join('all_staff');
+      } else if (authenticatedSocket.userType === 'vendor') {
+        client.join(`vendor_${authenticatedSocket.userId}`);
+      } else if (authenticatedSocket.userType === 'admin') {
+        client.join('all_admin');
+      }
 
       // Send welcome message
       client.emit('connected', {

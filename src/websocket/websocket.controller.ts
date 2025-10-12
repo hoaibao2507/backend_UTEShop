@@ -32,24 +32,87 @@ export class WebSocketController {
       }
     );
 
-    // Broadcast to staff/admin users
-    this.webSocketService.broadcastToUserType('staff', 'order_status_update', {
-      orderId: orderUpdate.orderId,
-      status: orderUpdate.status,
-      message: orderUpdate.message,
-      updatedBy: orderUpdate.updatedBy,
-      updatedByUsername: orderUpdate.updatedByUsername,
-      timestamp: new Date().toISOString(),
-    });
+    // Determine who updated the order to decide broadcast strategy
+    const isStaffUpdate = orderUpdate.updatedByUsername?.includes('staff');
+    const isVendorUpdate = orderUpdate.updatedByUsername?.includes('vendor');
 
-    this.webSocketService.broadcastToUserType('admin', 'order_status_update', {
-      orderId: orderUpdate.orderId,
-      status: orderUpdate.status,
-      message: orderUpdate.message,
-      updatedBy: orderUpdate.updatedBy,
-      updatedByUsername: orderUpdate.updatedByUsername,
-      timestamp: new Date().toISOString(),
-    });
+    if (isStaffUpdate) {
+      // When Staff updates order status
+      console.log(`📢 Staff ${orderUpdate.updatedByUsername} updated order ${orderUpdate.orderId} status`);
+      
+      // Broadcast to all staff room
+      this.webSocketService.broadcastToRoom('all_staff', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Broadcast to admin room
+      this.webSocketService.broadcastToRoom('all_admin', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+    } else if (isVendorUpdate) {
+      // When Vendor updates order status
+      console.log(`📢 Vendor ${orderUpdate.updatedByUsername} updated order ${orderUpdate.orderId} status`);
+      
+      // Broadcast to all staff room
+      this.webSocketService.broadcastToRoom('all_staff', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Broadcast to admin room
+      this.webSocketService.broadcastToRoom('all_admin', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+    } else {
+      // Fallback: Broadcast to all user types
+      this.webSocketService.broadcastToUserType('staff', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.webSocketService.broadcastToUserType('admin', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.webSocketService.broadcastToUserType('vendor', 'order_status_update', {
+        orderId: orderUpdate.orderId,
+        status: orderUpdate.status,
+        message: orderUpdate.message,
+        updatedBy: orderUpdate.updatedBy,
+        updatedByUsername: orderUpdate.updatedByUsername,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return {
       success: true,

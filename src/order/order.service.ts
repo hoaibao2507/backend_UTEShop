@@ -279,7 +279,7 @@ export class OrderService {
         order.status = status;
         const updatedOrder = await this.orderRepository.save(order);
 
-        // Broadcast WebSocket update
+        // Broadcast WebSocket update to order-specific room
         this.webSocketService.broadcastToRoom(
             `order_${id}`,
             'order_status_update',
@@ -293,28 +293,97 @@ export class OrderService {
             }
         );
 
-        // Broadcast to staff/admin users
-        this.webSocketService.broadcastToUserType('staff', 'order_status_update', {
-            orderId: id,
-            oldStatus,
-            newStatus: status,
-            updatedBy: updatedBy?.id,
-            updatedByUsername: updatedBy?.username,
-            timestamp: new Date().toISOString(),
-        });
+        // Determine who updated the order to decide broadcast strategy
+        const isStaffUpdate = updatedBy?.id && updatedBy?.username?.includes('staff');
+        const isVendorUpdate = updatedBy?.id && updatedBy?.username?.includes('vendor');
 
-        this.webSocketService.broadcastToUserType('admin', 'order_status_update', {
-            orderId: id,
-            oldStatus,
-            newStatus: status,
-            updatedBy: updatedBy?.id,
-            updatedByUsername: updatedBy?.username,
-            timestamp: new Date().toISOString(),
-        });
+        if (isStaffUpdate) {
+            // When Staff updates order status
+            console.log(`📢 Staff ${updatedBy.username} updated order ${id} status: ${oldStatus} → ${status}`);
+            
+            // 1. Customer room
+            if (order.userId) {
+                this.webSocketService.broadcastToRoom(`customer_${order.userId}`, 'order_status_update', {
+                    orderId: id,
+                    oldStatus,
+                    newStatus: status,
+                    updatedBy: updatedBy.id,
+                    updatedByUsername: updatedBy.username,
+                    timestamp: new Date().toISOString(),
+                });
+            }
 
-        // Notify the customer who placed the order
-        if (order.user) {
-            this.webSocketService.broadcastToUser(order.user.id, 'order_status_update', {
+            // 2. Vendor room (if order has vendor)
+            if (order.vendorId) {
+                this.webSocketService.broadcastToRoom(`vendor_${order.vendorId}`, 'order_status_update', {
+                    orderId: id,
+                    oldStatus,
+                    newStatus: status,
+                    updatedBy: updatedBy.id,
+                    updatedByUsername: updatedBy.username,
+                    timestamp: new Date().toISOString(),
+                });
+            }
+
+            // 3. All staff room
+            this.webSocketService.broadcastToRoom('all_staff', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy.id,
+                updatedByUsername: updatedBy.username,
+                timestamp: new Date().toISOString(),
+            });
+
+            // 4. Admin room
+            this.webSocketService.broadcastToRoom('all_admin', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy.id,
+                updatedByUsername: updatedBy.username,
+                timestamp: new Date().toISOString(),
+            });
+
+        } else if (isVendorUpdate) {
+            // When Vendor updates order status
+            console.log(`📢 Vendor ${updatedBy.username} updated order ${id} status: ${oldStatus} → ${status}`);
+            
+            // 1. Customer room
+            if (order.userId) {
+                this.webSocketService.broadcastToRoom(`customer_${order.userId}`, 'order_status_update', {
+                    orderId: id,
+                    oldStatus,
+                    newStatus: status,
+                    updatedBy: updatedBy.id,
+                    updatedByUsername: updatedBy.username,
+                    timestamp: new Date().toISOString(),
+                });
+            }
+
+            // 2. All staff room
+            this.webSocketService.broadcastToRoom('all_staff', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy.id,
+                updatedByUsername: updatedBy.username,
+                timestamp: new Date().toISOString(),
+            });
+
+            // 3. Admin room
+            this.webSocketService.broadcastToRoom('all_admin', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy.id,
+                updatedByUsername: updatedBy.username,
+                timestamp: new Date().toISOString(),
+            });
+
+        } else {
+            // Fallback: Broadcast to all user types (for admin updates or unknown)
+            this.webSocketService.broadcastToUserType('staff', 'order_status_update', {
                 orderId: id,
                 oldStatus,
                 newStatus: status,
@@ -322,6 +391,36 @@ export class OrderService {
                 updatedByUsername: updatedBy?.username,
                 timestamp: new Date().toISOString(),
             });
+
+            this.webSocketService.broadcastToUserType('admin', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy?.id,
+                updatedByUsername: updatedBy?.username,
+                timestamp: new Date().toISOString(),
+            });
+
+            this.webSocketService.broadcastToUserType('vendor', 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy?.id,
+                updatedByUsername: updatedBy?.username,
+                timestamp: new Date().toISOString(),
+            });
+
+            // Notify the customer who placed the order
+            if (order.userId) {
+                this.webSocketService.broadcastToRoom(`customer_${order.userId}`, 'order_status_update', {
+                    orderId: id,
+                    oldStatus,
+                    newStatus: status,
+                    updatedBy: updatedBy?.id,
+                    updatedByUsername: updatedBy?.username,
+                    timestamp: new Date().toISOString(),
+                });
+            }
         }
 
         return updatedOrder;
