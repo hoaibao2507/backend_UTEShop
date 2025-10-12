@@ -10,6 +10,7 @@ import { Cart } from '../entities/cart.entity';
 import { CartItem } from '../entities/cart-item.entity';
 import { Product } from '../entities/product.entity';
 import { PaymentMethod } from '../entities/payment-method.entity';
+import { WebSocketService } from '../websocket/websocket.service';
 
 @Injectable()
 export class OrderService {
@@ -28,6 +29,7 @@ export class OrderService {
         private productRepository: Repository<Product>,
         @InjectRepository(PaymentMethod)
         private paymentMethodRepository: Repository<PaymentMethod>,
+        private webSocketService: WebSocketService,
         private dataSource: DataSource,
     ) {}
 
@@ -266,15 +268,63 @@ export class OrderService {
         }
     }
 
-    async updateStatus(id: number, status: OrderStatus): Promise<Order> {
+    async updateStatus(id: number, status: OrderStatus, updatedBy?: { id: number; username: string }): Promise<Order> {
         const order = await this.findOne(id);
         
         if (!order.canBeCanceled && status === OrderStatus.CANCELED) {
             throw new BadRequestException('Order cannot be cancelled in current status');
         }
 
+        const oldStatus = order.status;
         order.status = status;
-        return await this.orderRepository.save(order);
+        const updatedOrder = await this.orderRepository.save(order);
+
+        // Broadcast WebSocket update
+        this.webSocketService.broadcastToRoom(
+            `order_${id}`,
+            'order_status_update',
+            {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy?.id,
+                updatedByUsername: updatedBy?.username,
+                timestamp: new Date().toISOString(),
+            }
+        );
+
+        // Broadcast to staff/admin users
+        this.webSocketService.broadcastToUserType('staff', 'order_status_update', {
+            orderId: id,
+            oldStatus,
+            newStatus: status,
+            updatedBy: updatedBy?.id,
+            updatedByUsername: updatedBy?.username,
+            timestamp: new Date().toISOString(),
+        });
+
+        this.webSocketService.broadcastToUserType('admin', 'order_status_update', {
+            orderId: id,
+            oldStatus,
+            newStatus: status,
+            updatedBy: updatedBy?.id,
+            updatedByUsername: updatedBy?.username,
+            timestamp: new Date().toISOString(),
+        });
+
+        // Notify the customer who placed the order
+        if (order.user) {
+            this.webSocketService.broadcastToUser(order.user.id, 'order_status_update', {
+                orderId: id,
+                oldStatus,
+                newStatus: status,
+                updatedBy: updatedBy?.id,
+                updatedByUsername: updatedBy?.username,
+                timestamp: new Date().toISOString(),
+            });
+        }
+
+        return updatedOrder;
     }
 
     async getOrderStatistics(): Promise<{ totalOrders: number; pendingOrders: number; completedOrders: number; cancelledOrders: number }> {

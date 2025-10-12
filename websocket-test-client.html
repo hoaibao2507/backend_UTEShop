@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .message { background: #d1ecf1; color: #0c5460; }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+        .message-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket Test Client</h1>
+    
+    <div class="container">
+        <h3>Connection</h3>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="tokenInput" placeholder="JWT Token" style="width: 300px;">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="ping()">Ping</button>
+    </div>
+
+    <div class="container">
+        <h3>Order Subscription</h3>
+        <input type="number" id="orderIdInput" placeholder="Order ID" style="width: 100px;">
+        <button onclick="subscribeOrder()">Subscribe</button>
+        <button onclick="unsubscribeOrder()">Unsubscribe</button>
+    </div>
+
+    <div class="container">
+        <h3>Test Messages</h3>
+        <input type="text" id="testMessageInput" placeholder="Test message" style="width: 200px;">
+        <button onclick="sendTestMessage()">Broadcast Test</button>
+        <input type="number" id="targetUserIdInput" placeholder="Target User ID" style="width: 100px;">
+        <button onclick="sendUserMessage()">Send to User</button>
+    </div>
+
+    <div class="container">
+        <h3>Messages</h3>
+        <div id="messages"></div>
+        <button onclick="clearMessages()">Clear</button>
+    </div>
+
+    <script>
+        let socket = null;
+        let isConnected = false;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+        let reconnectInterval = 5000; // 5 seconds
+        let heartbeatInterval = null;
+
+        function updateStatus(message, className) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${className}`;
+        }
+
+        function addMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-item';
+            messageDiv.innerHTML = `
+                <strong>[${new Date().toLocaleTimeString()}]</strong> 
+                <span style="color: ${type === 'error' ? 'red' : type === 'success' ? 'green' : 'blue'}">${message}</span>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function connect() {
+            const token = document.getElementById('tokenInput').value.trim();
+            if (!token) {
+                alert('Please enter a JWT token');
+                return;
+            }
+
+            if (socket) {
+                socket.disconnect();
+            }
+
+            // Connect to WebSocket with better configuration
+            socket = io('http://localhost:3001', {
+                query: { token: token },
+                transports: ['websocket', 'polling'],
+                timeout: 20000,
+                forceNew: true,
+                reconnection: true,
+                reconnectionAttempts: maxReconnectAttempts,
+                reconnectionDelay: reconnectInterval,
+                reconnectionDelayMax: 10000,
+                maxReconnectionAttempts: maxReconnectAttempts
+            });
+
+            socket.on('connect', () => {
+                isConnected = true;
+                reconnectAttempts = 0;
+                updateStatus('Connected', 'connected');
+                addMessage('Connected to WebSocket server', 'success');
+                
+                // Start heartbeat
+                startHeartbeat();
+            });
+
+            socket.on('disconnect', (reason) => {
+                isConnected = false;
+                updateStatus('Disconnected', 'disconnected');
+                addMessage(`Disconnected from WebSocket server: ${reason}`, 'error');
+                
+                // Stop heartbeat
+                stopHeartbeat();
+                
+                // Auto-reconnect if not manually disconnected
+                if (reason !== 'io client disconnect') {
+                    attemptReconnect();
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                addMessage(`Connection error: ${error.message}`, 'error');
+                attemptReconnect();
+            });
+
+            socket.on('connected', (data) => {
+                addMessage(`Welcome! User: ${data.username} (${data.userType})`, 'success');
+            });
+
+            socket.on('error', (error) => {
+                addMessage(`Error: ${error.message}`, 'error');
+            });
+
+            socket.on('order_status_update', (data) => {
+                addMessage(`Order ${data.orderId} status changed: ${data.oldStatus} → ${data.newStatus} (by ${data.updatedByUsername})`, 'info');
+            });
+
+            socket.on('notification', (data) => {
+                addMessage(`Notification: ${data.title} - ${data.message}`, 'info');
+            });
+
+            socket.on('test_message', (data) => {
+                addMessage(`Test message from ${data.from}: ${data.message}`, 'info');
+            });
+
+            socket.on('test_user_message', (data) => {
+                addMessage(`Personal message from ${data.from}: ${data.message}`, 'info');
+            });
+
+            socket.on('pong', (data) => {
+                addMessage(`Pong received at ${data.timestamp}`, 'success');
+            });
+
+            socket.on('subscribed_order', (data) => {
+                addMessage(`Subscribed to order ${data.orderId}`, 'success');
+            });
+
+            socket.on('unsubscribed_order', (data) => {
+                addMessage(`Unsubscribed from order ${data.orderId}`, 'success');
+            });
+
+            socket.on('joined_room', (data) => {
+                addMessage(`Joined room: ${data.room}`, 'success');
+            });
+
+            socket.on('left_room', (data) => {
+                addMessage(`Left room: ${data.room}`, 'success');
+            });
+
+            socket.on('connection_info', (data) => {
+                addMessage(`Connection info: Client ${data.clientId}, User ${data.userId} (${data.userType}), Total clients: ${data.connectedClients}`, 'info');
+            });
+
+            socket.on('heartbeat_ack', (data) => {
+                addMessage(`Heartbeat acknowledged at ${data.timestamp}`, 'success');
+            });
+        }
+
+        function attemptReconnect() {
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                updateStatus(`Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`, 'disconnected');
+                addMessage(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})`, 'info');
+                
+                setTimeout(() => {
+                    if (socket && !isConnected) {
+                        socket.connect();
+                    }
+                }, reconnectInterval * reconnectAttempts);
+            } else {
+                updateStatus('Reconnection failed', 'disconnected');
+                addMessage('Max reconnection attempts reached', 'error');
+            }
+        }
+
+        function startHeartbeat() {
+            stopHeartbeat(); // Clear any existing interval
+            heartbeatInterval = setInterval(() => {
+                if (socket && isConnected) {
+                    socket.emit('heartbeat');
+                }
+            }, 30000); // Send heartbeat every 30 seconds
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function disconnect() {
+            if (socket) {
+                stopHeartbeat();
+                socket.disconnect();
+                socket = null;
+                isConnected = false;
+                reconnectAttempts = 0;
+                updateStatus('Disconnected', 'disconnected');
+            }
+        }
+
+        function ping() {
+            if (socket && isConnected) {
+                socket.emit('ping');
+                addMessage('Ping sent', 'info');
+            } else {
+                addMessage('Not connected', 'error');
+            }
+        }
+
+        function subscribeOrder() {
+            const orderId = document.getElementById('orderIdInput').value;
+            if (socket && isConnected && orderId) {
+                socket.emit('subscribe_order_updates', { orderId: parseInt(orderId) });
+                addMessage(`Subscribing to order ${orderId}`, 'info');
+            } else {
+                addMessage('Not connected or invalid order ID', 'error');
+            }
+        }
+
+        function unsubscribeOrder() {
+            const orderId = document.getElementById('orderIdInput').value;
+            if (socket && isConnected && orderId) {
+                socket.emit('unsubscribe_order_updates', { orderId: parseInt(orderId) });
+                addMessage(`Unsubscribing from order ${orderId}`, 'info');
+            } else {
+                addMessage('Not connected or invalid order ID', 'error');
+            }
+        }
+
+        function sendTestMessage() {
+            const message = document.getElementById('testMessageInput').value;
+            if (socket && isConnected && message) {
+                socket.emit('test_broadcast', { message: message });
+                addMessage(`Test message sent: ${message}`, 'info');
+            } else {
+                addMessage('Not connected or empty message', 'error');
+            }
+        }
+
+        function sendUserMessage() {
+            const message = document.getElementById('testMessageInput').value;
+            const targetUserId = document.getElementById('targetUserIdInput').value;
+            if (socket && isConnected && message && targetUserId) {
+                socket.emit('test_user_broadcast', { 
+                    message: message, 
+                    targetUserId: parseInt(targetUserId) 
+                });
+                addMessage(`User message sent to ${targetUserId}: ${message}`, 'info');
+            } else {
+                addMessage('Not connected or missing message/target user ID', 'error');
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Sample tokens for testing (replace with real tokens)
+        document.getElementById('tokenInput').value = 'your-jwt-token-here';
+    </script>
+</body>
+</html>
+

@@ -13,12 +13,14 @@ import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method
 import { OrderTracking } from '../entities/order-tracking.entity';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
+import { WebSocketModule } from '../websocket/websocket.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Order, OrderDetail, Cart, CartItem, Product, PaymentMethodEntity, OrderTracking]), 
         AuthModule,
-        PaymentModule
+        PaymentModule,
+        WebSocketModule
     ],
     controllers: [OrderController, OrderPaymentController],
     providers: [OrderService, OrderPaymentService],
