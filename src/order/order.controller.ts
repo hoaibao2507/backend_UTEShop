@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Patch ,Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch ,Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto, UpdateOrderDto, OrderQueryDto } from './dto/order.dto';
 import { OrderStatus } from '../entities/order-status.enum';
@@ -90,8 +90,12 @@ export class OrderController {
     @ApiResponse({ status: 200, description: 'Trạng thái đơn hàng được cập nhật thành công' })
     @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
     @ApiResponse({ status: 404, description: 'Không tìm thấy đơn hàng' })
-    async updateStatus(@Param('id') id: string, @Body('status') status: OrderStatus) {
-        return this.orderService.updateStatus(+id, status);
+    async updateStatus(@Param('id') id: string, @Body('status') status: OrderStatus, @Request() req) {
+        const updatedBy = {
+            id: req.user.id || req.user.sub,
+            username: req.user.username || req.user.email || 'Unknown'
+        };
+        return this.orderService.updateStatus(+id, status, updatedBy);
     }
 
     @Delete(':id')
