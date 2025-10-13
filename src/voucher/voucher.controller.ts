@@ -28,6 +28,11 @@ export class VoucherController {
         return this.voucherService.deactivate(id);
     }
 
+    @Delete(':id/hard')
+    hardDelete(@Param('id', ParseIntPipe) id: number) {
+        return this.voucherService.hardDelete(id);
+    }
+
     @Post('apply')
     apply(@Body() dto: ApplyVoucherDto) {
         return this.voucherService.apply(dto);

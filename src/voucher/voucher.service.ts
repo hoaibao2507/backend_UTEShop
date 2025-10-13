@@ -68,6 +68,19 @@ export class VoucherService {
         await this.voucherRepo.save(voucher);
     }
 
+    async hardDelete(id: number): Promise<void> {
+        const voucher = await this.voucherRepo.findOne({ where: { id } });
+        if (!voucher) throw new NotFoundException('Voucher not found');
+        
+        // Kiểm tra xem voucher có đang được sử dụng trong đơn hàng không
+        const orderVoucher = await this.orderVoucherRepo.findOne({ where: { voucherId: id } });
+        if (orderVoucher) {
+            throw new BadRequestException('Cannot delete voucher that has been used in orders');
+        }
+        
+        await this.voucherRepo.remove(voucher);
+    }
+
     async apply(dto: ApplyVoucherDto): Promise<{ valid: boolean; discount: number; finalAmount: number; voucher?: Voucher }>{
         const code = dto.code.trim().toUpperCase();
         const voucher = await this.voucherRepo.findOne({ where: { code } });
