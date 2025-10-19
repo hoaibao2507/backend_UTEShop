@@ -11,7 +11,6 @@ export class Voucher {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Index()
     @Column({ type: 'varchar', length: 50 })
     code: string; // store uppercase
 
