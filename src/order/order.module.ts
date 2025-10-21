@@ -11,6 +11,9 @@ import { CartItem } from '../entities/cart-item.entity';
 import { Product } from '../entities/product.entity';
 import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method.entity';
 import { OrderTracking } from '../entities/order-tracking.entity';
+import { VoucherUsage } from '../entities/voucher-usage.entity';
+import { OrderVoucher } from '../entities/order-voucher.entity';
+import { Voucher } from '../entities/voucher.entity';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { WebSocketModule } from '../websocket/websocket.module';
@@ -18,7 +21,7 @@ import { VoucherModule } from '../voucher/voucher.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Order, OrderDetail, Cart, CartItem, Product, PaymentMethodEntity, OrderTracking]), 
+        TypeOrmModule.forFeature([Order, OrderDetail, Cart, CartItem, Product, PaymentMethodEntity, OrderTracking, Voucher, VoucherUsage, OrderVoucher]), 
         AuthModule,
         PaymentModule,
         WebSocketModule,

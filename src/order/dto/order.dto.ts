@@ -124,6 +124,11 @@ export class CreateOrderDto {
   orderDetails?: OrderDetailDto[];
 
   // Voucher fields
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  voucherId?: number;
+
   @IsString()
   @IsOptional()
   voucherCode?: string;

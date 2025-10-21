@@ -10,6 +10,9 @@ import { Cart } from '../entities/cart.entity';
 import { CartItem } from '../entities/cart-item.entity';
 import { Product } from '../entities/product.entity';
 import { PaymentMethod } from '../entities/payment-method.entity';
+import { Voucher } from '../entities/voucher.entity';
+import { VoucherUsage } from '../entities/voucher-usage.entity';
+import { OrderVoucher } from '../entities/order-voucher.entity';
 import { WebSocketService } from '../websocket/websocket.service';
 import { VoucherService } from '../voucher/voucher.service';
 
@@ -39,7 +42,10 @@ export class OrderService {
         
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
-        await queryRunner.startTransaction();
+        await queryRunner.startTransaction('READ COMMITTED');
+        
+        // Set lock wait timeout to 10 seconds
+        await queryRunner.query('SET innodb_lock_wait_timeout = 10');
 
         try {
             // Determine if this is cart-based or direct order creation
@@ -126,8 +132,8 @@ export class OrderService {
                 throw new BadRequestException('Shipping address is required');
             }
 
-            // 4. Validate items and calculate total
-            let totalAmount = 0;
+            // 4. Validate items and calculate subtotal (products only, no shipping)
+            let subtotal = 0;
             const orderDetailsData: Array<{
                 productId: number;
                 quantity: number;
@@ -163,13 +169,14 @@ export class OrderService {
                     }
 
                     // Calculate item total
-                    const itemTotal = item.price * item.quantity;
-                    totalAmount += itemTotal;
+                    const unitPrice = Number(item.price);
+                    const itemTotal = unitPrice * item.quantity;
+                    subtotal += itemTotal;
 
                     orderDetailsData.push({
                         productId: item.productId,
                         quantity: item.quantity,
-                        unitPrice: item.price,
+                        unitPrice: unitPrice,
                     });
                 }
             } else {
@@ -189,28 +196,42 @@ export class OrderService {
                     }
 
                     // Calculate item total
-                    const itemTotal = detail.unitPrice * detail.quantity;
-                    totalAmount += itemTotal;
+                    const unitPrice = Number(detail.unitPrice);
+                    const itemTotal = unitPrice * detail.quantity;
+                    subtotal += itemTotal;
 
                     orderDetailsData.push({
                         productId: detail.productId,
                         quantity: detail.quantity,
-                        unitPrice: detail.unitPrice,
+                        unitPrice: unitPrice,
                     });
                 }
             }
 
-            // 5. Handle voucher if provided
-            let finalAmount = totalAmount;
+            // 5. Get shipping fee from request or default to 0
+            const shippingFee = Number(createOrderDto.shippingFee) || 0;
+
+            // 6. Handle voucher if provided (apply to subtotal only, not shipping)
             let voucherDiscount = 0;
             let voucherId: number | null = null;
 
-            if (createOrderDto.voucherCode) {
+            // Handle voucher by ID (new format)
+            if (createOrderDto.voucherId) {
                 try {
+                    // Fetch voucher by ID
+                    const voucher = await queryRunner.manager.findOne(Voucher, {
+                        where: { id: createOrderDto.voucherId }
+                    });
+
+                    if (!voucher) {
+                        throw new NotFoundException('Voucher not found');
+                    }
+
+                    // Validate voucher for user (apply to subtotal only)
                     const voucherValidation = await this.voucherService.validateVoucherForUser(
-                        createOrderDto.voucherCode,
+                        voucher.code,
                         createOrderDto.userId,
-                        totalAmount
+                        subtotal
                     );
 
                     if (!voucherValidation.valid) {
@@ -218,23 +239,48 @@ export class OrderService {
                     }
 
                     voucherDiscount = voucherValidation.discount;
-                    finalAmount = voucherValidation.finalAmount;
-                    voucherId = voucherValidation.voucher?.id || null;
+                    voucherId = createOrderDto.voucherId;
 
-                    // Validate final amount matches what frontend calculated
-                    if (createOrderDto.finalAmount && Math.abs(createOrderDto.finalAmount - finalAmount) > 0.01) {
-                        throw new BadRequestException('Final amount mismatch. Please recalculate with voucher.');
+                } catch (error) {
+                    console.error('Voucher validation error:', error);
+                    throw new BadRequestException(`Voucher validation failed: ${error.message}`);
+                }
+            } 
+            // Handle voucher by code (old format)
+            else if (createOrderDto.voucherCode) {
+                try {
+                    const voucherValidation = await this.voucherService.validateVoucherForUser(
+                        createOrderDto.voucherCode,
+                        createOrderDto.userId,
+                        subtotal
+                    );
+
+                    if (!voucherValidation.valid) {
+                        throw new BadRequestException(`Voucher validation failed: ${voucherValidation.message}`);
                     }
+
+                    voucherDiscount = voucherValidation.discount;
+                    voucherId = voucherValidation.voucher?.id || null;
                 } catch (error) {
                     console.error('Voucher validation error:', error);
                     throw new BadRequestException(`Voucher validation failed: ${error.message}`);
                 }
             }
 
-            // 6. Create order
+            // 7. Calculate final amount: subtotal + shippingFee - voucherDiscount
+            const finalAmount = Math.max(0, subtotal + shippingFee - voucherDiscount);
+
+            // Validate with frontend's totalAmount if provided
+            const frontendTotalAmount = createOrderDto.totalAmount ? Number(createOrderDto.totalAmount) : null;
+            if (frontendTotalAmount && Math.abs(frontendTotalAmount - finalAmount) > 1) {
+                console.warn(`Amount mismatch - Frontend: ${frontendTotalAmount}, Backend: ${finalAmount}`);
+                // Log warning but don't throw error to avoid blocking orders
+            }
+
+            // 8. Create order
             const order = this.orderRepository.create({
                 userId: isCartBased ? cart.userId : createOrderDto.userId,
-                totalAmount: finalAmount, // Use final amount after voucher discount
+                totalAmount: finalAmount, // Final amount = subtotal + shipping - discount
                 status: OrderStatus.NEW,
                 paymentMethod: paymentMethodEnum,
                 paymentStatus: paymentMethodEnum === PaymentMethodEnum.COD ? PaymentStatus.PENDING : PaymentStatus.PENDING,
@@ -244,7 +290,7 @@ export class OrderService {
 
             const savedOrder = await queryRunner.manager.save(order);
 
-            // 7. Create order details
+            // 9. Create order details
             for (const detailData of orderDetailsData) {
                 const orderDetail = this.orderDetailRepository.create({
                     orderId: savedOrder.orderId,
@@ -261,7 +307,7 @@ export class OrderService {
                 );
             }
 
-            // 8. Create order tracking
+            // 10. Create order tracking
             const tracking = this.trackingRepository.create({
                 order: savedOrder,
                 status: OrderStatus.NEW,
@@ -269,17 +315,44 @@ export class OrderService {
             });
             await queryRunner.manager.save(tracking);
 
-            // 9. Record voucher usage if voucher was applied
+            // 11. Record voucher usage if voucher was applied (within same transaction)
             if (voucherId && voucherDiscount > 0) {
-                await this.voucherService.recordVoucherUsage(
-                    voucherId,
-                    createOrderDto.userId,
-                    savedOrder.orderId,
-                    voucherDiscount
-                );
+                // Update voucher used count
+                await queryRunner.manager.increment(Voucher, { id: voucherId }, 'usedCount', 1);
+
+                // Update or create voucher usage record
+                const existingUsage = await queryRunner.manager.findOne(VoucherUsage, {
+                    where: { voucherId, userId: createOrderDto.userId }
+                });
+
+                if (existingUsage) {
+                    existingUsage.timesUsed += 1;
+                    await queryRunner.manager.save(VoucherUsage, existingUsage);
+                } else {
+                    const newUsage = queryRunner.manager.create(VoucherUsage, {
+                        voucherId,
+                        userId: createOrderDto.userId,
+                        timesUsed: 1
+                    });
+                    await queryRunner.manager.save(VoucherUsage, newUsage);
+                }
+
+                // Create order voucher record
+                const voucher = await queryRunner.manager.findOne(Voucher, { where: { id: voucherId } });
+                if (voucher) {
+                    const orderVoucher = queryRunner.manager.create(OrderVoucher, {
+                        orderId: savedOrder.orderId,
+                        voucherId,
+                        codeSnapshot: voucher.code,
+                        discountTypeSnapshot: voucher.discountType,
+                        discountValueSnapshot: voucher.discountValue,
+                        discountApplied: voucherDiscount
+                    });
+                    await queryRunner.manager.save(OrderVoucher, orderVoucher);
+                }
             }
 
-            // 10. Remove selected items from cart (only for cart-based orders)
+            // 12. Remove selected items from cart (only for cart-based orders)
             if (isCartBased) {
                 for (const item of createOrderDto.selectedItems!) {
                     await queryRunner.manager.delete(CartItem, { cartItemId: item.cartItemId });
