@@ -24,6 +24,7 @@ import { VendorModule } from './vendor/vendor.module';
 import { AdminModule } from './admin/admin.module';
 import { StaffModule } from './staff/staff.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -69,6 +70,7 @@ import { join } from 'path';
     AdminModule,
     StaffModule,
     WebSocketModule,
+    CloudinaryModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],
