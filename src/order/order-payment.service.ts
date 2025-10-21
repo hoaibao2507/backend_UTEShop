@@ -10,6 +10,7 @@ import { CartItem } from '../entities/cart-item.entity';
 import { Product } from '../entities/product.entity';
 import { CreateOrderDto } from './dto/order.dto';
 import { PaymentService } from '../payment/payment.service';
+import { VoucherService } from '../voucher/voucher.service';
 
 export interface CreateOrderWithPaymentDto extends CreateOrderDto {
   cartId: number;
@@ -21,6 +22,7 @@ export interface OrderSummary {
   payment: Payment;
   totalItems: number;
   totalAmount: number;
+  voucherDiscount: number;
 }
 
 @Injectable()
@@ -37,6 +39,7 @@ export class OrderPaymentService {
     @InjectRepository(PaymentMethodEntity)
     private paymentMethodRepository: Repository<PaymentMethodEntity>,
     private paymentService: PaymentService,
+    private voucherService: VoucherService,
   ) {}
 
   async createOrderWithPayment(createOrderDto: CreateOrderWithPaymentDto): Promise<OrderSummary> {
@@ -100,25 +103,51 @@ export class OrderPaymentService {
       });
     }
 
-    // 4. Validate total amount matches
+    // 4. Handle voucher if provided
+    let finalAmount = totalAmount;
+    let voucherDiscount = 0;
+    let voucherId: number | null = null;
+
+    if (createOrderDto.voucherCode) {
+      const voucherValidation = await this.voucherService.validateVoucherForUser(
+        createOrderDto.voucherCode,
+        createOrderDto.userId,
+        totalAmount
+      );
+
+      if (!voucherValidation.valid) {
+        throw new BadRequestException(`Voucher validation failed: ${voucherValidation.message}`);
+      }
+
+      voucherDiscount = voucherValidation.discount;
+      finalAmount = voucherValidation.finalAmount;
+      voucherId = voucherValidation.voucher?.id || null;
+
+      // Validate final amount matches what frontend calculated
+      if (createOrderDto.finalAmount && Math.abs(createOrderDto.finalAmount - finalAmount) > 0.01) {
+        throw new BadRequestException('Final amount mismatch. Please recalculate with voucher.');
+      }
+    }
+
+    // 5. Validate total amount matches (use original totalAmount for validation)
     if (Math.abs(totalAmount - createOrderDto.totalAmount) > 0.01) {
       throw new BadRequestException(`Total amount mismatch. Calculated: ${totalAmount}, Provided: ${createOrderDto.totalAmount}`);
     }
 
-    // 5. Create order
+    // 6. Create order
     const order = this.orderRepository.create({
       userId: createOrderDto.userId,
-      totalAmount,
+      totalAmount: finalAmount, // Use final amount after voucher discount
       status: OrderStatus.NEW,
       paymentMethod: paymentMethod.name as PaymentMethod,
       paymentStatus: PaymentStatus.PENDING,
-      shippingAddress: createOrderDto.shippingInfo.shippingAddress,
+      shippingAddress: createOrderDto.shippingInfo?.shippingAddress || createOrderDto.shippingAddress || '',
       notes: createOrderDto.notes,
     });
 
     const savedOrder = await this.orderRepository.save(order);
 
-    // 6. Create order details
+    // 7. Create order details
     for (const detail of orderDetails) {
       await this.orderRepository.query(`
         INSERT INTO order_details (orderId, productId, quantity, price, total)
@@ -126,7 +155,7 @@ export class OrderPaymentService {
       `, [savedOrder.orderId, detail.productId, detail.quantity, detail.price, detail.total]);
     }
 
-    // 7. Update inventory
+    // 8. Update inventory
     for (const cartItem of cart.cartItems) {
       await this.productRepository.query(`
         UPDATE products 
@@ -135,23 +164,34 @@ export class OrderPaymentService {
       `, [cartItem.quantity, cartItem.productId]);
     }
 
-    // 8. Create payment
+    // 9. Create payment
     const payment = await this.paymentService.create({
       orderId: savedOrder.orderId,
       paymentMethodId: createOrderDto.paymentMethodId,
-      amount: totalAmount,
+      amount: finalAmount, // Use final amount for payment
       currency: 'VND',
       description: `Payment for order #${savedOrder.orderId}`,
     });
 
-    // 9. Clear cart
+    // 10. Record voucher usage if voucher was applied
+    if (voucherId && voucherDiscount > 0) {
+      await this.voucherService.recordVoucherUsage(
+        voucherId,
+        createOrderDto.userId,
+        savedOrder.orderId,
+        voucherDiscount
+      );
+    }
+
+    // 11. Clear cart
     await this.cartItemRepository.delete({ cartId: createOrderDto.cartId });
 
     return {
       order: savedOrder,
       payment,
       totalItems: cart.cartItems.length,
-      totalAmount,
+      totalAmount: finalAmount, // Return final amount
+      voucherDiscount, // Include voucher discount info
     };
   }
 

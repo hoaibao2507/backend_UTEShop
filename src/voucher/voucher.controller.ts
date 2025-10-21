@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
 import { VoucherService } from './voucher.service';
 import { CreateVoucherDto } from './dto/create-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
@@ -16,6 +16,11 @@ export class VoucherController {
     @Get()
     findAll() {
         return this.voucherService.findAll();
+    }
+
+    @Get('available')
+    getAvailableVouchers(@Query('userId', ParseIntPipe) userId: number, @Query('orderAmount', ParseIntPipe) orderAmount: number) {
+        return this.voucherService.getAvailableVouchers(userId, orderAmount);
     }
 
     @Put(':id')
@@ -36,6 +41,11 @@ export class VoucherController {
     @Post('apply')
     apply(@Body() dto: ApplyVoucherDto) {
         return this.voucherService.apply(dto);
+    }
+
+    @Post('validate-user')
+    validateForUser(@Body() dto: { code: string; userId: number; orderAmount: number }) {
+        return this.voucherService.validateVoucherForUser(dto.code, dto.userId, dto.orderAmount);
     }
 }
 
