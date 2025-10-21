@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Voucher } from '../entities/voucher.entity';
 import { VoucherDiscountType } from '../entities/enums/voucher-discount-type.enum';
 import { OrderVoucher } from '../entities/order-voucher.entity';
+import { VoucherUsage } from '../entities/voucher-usage.entity';
 import { CreateVoucherDto } from './dto/create-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
 import { ApplyVoucherDto } from './dto/apply-voucher.dto';
@@ -13,6 +14,7 @@ export class VoucherService {
     constructor(
         @InjectRepository(Voucher) private readonly voucherRepo: Repository<Voucher>,
         @InjectRepository(OrderVoucher) private readonly orderVoucherRepo: Repository<OrderVoucher>,
+        @InjectRepository(VoucherUsage) private readonly voucherUsageRepo: Repository<VoucherUsage>,
     ) {}
 
     async create(dto: CreateVoucherDto): Promise<Voucher> {
@@ -68,6 +70,19 @@ export class VoucherService {
         await this.voucherRepo.save(voucher);
     }
 
+    async hardDelete(id: number): Promise<void> {
+        const voucher = await this.voucherRepo.findOne({ where: { id } });
+        if (!voucher) throw new NotFoundException('Voucher not found');
+        
+        // Kiểm tra xem voucher có đang được sử dụng trong đơn hàng không
+        const orderVoucher = await this.orderVoucherRepo.findOne({ where: { voucherId: id } });
+        if (orderVoucher) {
+            throw new BadRequestException('Cannot delete voucher that has been used in orders');
+        }
+        
+        await this.voucherRepo.remove(voucher);
+    }
+
     async apply(dto: ApplyVoucherDto): Promise<{ valid: boolean; discount: number; finalAmount: number; voucher?: Voucher }>{
         const code = dto.code.trim().toUpperCase();
         const voucher = await this.voucherRepo.findOne({ where: { code } });
@@ -107,6 +122,116 @@ export class VoucherService {
             default:
                 return 0;
         }
+    }
+
+    async validateVoucherForUser(code: string, userId: number, orderAmount: number): Promise<{ valid: boolean; discount: number; finalAmount: number; voucher?: Voucher; message?: string }> {
+        try {
+            const normalizedCode = code.trim().toUpperCase();
+            const voucher = await this.voucherRepo.findOne({ where: { code: normalizedCode } });
+            
+            if (!voucher) {
+                return { valid: false, discount: 0, finalAmount: orderAmount, message: 'Voucher not found' };
+            }
+
+            // Check basic voucher validity
+            this.assertVoucherUsable(voucher, orderAmount);
+
+            // Check per user limit
+            if (voucher.perUserLimit !== null && voucher.perUserLimit !== undefined) {
+                const userUsage = await this.voucherUsageRepo.findOne({ 
+                    where: { voucherId: voucher.id, userId } 
+                });
+                
+                if (userUsage && userUsage.timesUsed >= voucher.perUserLimit) {
+                    return { valid: false, discount: 0, finalAmount: orderAmount, message: 'User has reached voucher usage limit' };
+                }
+            }
+
+            const discount = this.calculateDiscount(voucher, orderAmount);
+            const finalAmount = Math.max(0, orderAmount - discount);
+            
+            return { valid: true, discount, finalAmount, voucher };
+        } catch (error) {
+            return { valid: false, discount: 0, finalAmount: orderAmount, message: error.message };
+        }
+    }
+
+    async recordVoucherUsage(voucherId: number, userId: number, orderId: number, discountApplied: number): Promise<void> {
+        // Update voucher used count
+        await this.voucherRepo.query(`
+            UPDATE vouchers 
+            SET usedCount = usedCount + 1 
+            WHERE id = ?
+        `, [voucherId]);
+
+        // Update or create voucher usage record
+        const existingUsage = await this.voucherUsageRepo.findOne({
+            where: { voucherId, userId }
+        });
+
+        if (existingUsage) {
+            existingUsage.timesUsed += 1;
+            await this.voucherUsageRepo.save(existingUsage);
+        } else {
+            const newUsage = this.voucherUsageRepo.create({
+                voucherId,
+                userId,
+                timesUsed: 1
+            });
+            await this.voucherUsageRepo.save(newUsage);
+        }
+
+        // Create order voucher record
+        const voucher = await this.voucherRepo.findOne({ where: { id: voucherId } });
+        if (voucher) {
+            const orderVoucher = this.orderVoucherRepo.create({
+                orderId,
+                voucherId,
+                codeSnapshot: voucher.code,
+                discountTypeSnapshot: voucher.discountType,
+                discountValueSnapshot: voucher.discountValue,
+                discountApplied
+            });
+            await this.orderVoucherRepo.save(orderVoucher);
+        }
+    }
+
+    async getAvailableVouchers(userId: number, orderAmount: number): Promise<Voucher[]> {
+        const now = new Date();
+        const vouchers = await this.voucherRepo.find({
+            where: {
+                isActive: true,
+                isDeleted: false,
+                startDate: LessThanOrEqual(now),
+                endDate: MoreThanOrEqual(now)
+            }
+        });
+
+        const availableVouchers: Voucher[] = [];
+        for (const voucher of vouchers) {
+            try {
+                // Check if voucher is usable
+                this.assertVoucherUsable(voucher, orderAmount);
+                
+                // Check per user limit
+                if (voucher.perUserLimit !== null && voucher.perUserLimit !== undefined) {
+                    const userUsage = await this.voucherUsageRepo.findOne({ 
+                        where: { voucherId: voucher.id, userId } 
+                    });
+                    
+                    if (userUsage && userUsage.timesUsed >= voucher.perUserLimit) {
+                        continue; // Skip this voucher
+                    }
+                }
+                
+                availableVouchers.push(voucher);
+            } catch (error) {
+                // Skip invalid vouchers
+                continue;
+            }
+        }
+
+        return availableVouchers;
     }
 }
 

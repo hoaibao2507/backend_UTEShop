@@ -56,6 +56,21 @@ export class SelectedItemDto {
   price: number;
 }
 
+export class OrderDetailDto {
+  @IsNumber()
+  @IsPositive()
+  productId: number;
+
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @IsNumber()
+  @IsPositive()
+  @Type(() => Number)
+  unitPrice: number;
+}
+
 export class CreateOrderDto {
   @IsNumber()
   @IsPositive()
@@ -65,16 +80,23 @@ export class CreateOrderDto {
   @IsNumber()
   @IsPositive()
   @Type(() => Number)
-  cartId: number;
+  @IsOptional()
+  cartId?: number;
 
   @ValidateNested()
   @Type(() => ShippingInfoDto)
-  shippingInfo: ShippingInfoDto;
+  @IsOptional()
+  shippingInfo?: ShippingInfoDto;
 
   @IsNumber()
   @IsPositive()
   @Type(() => Number)
-  paymentMethodId: number;
+  @IsOptional()
+  paymentMethodId?: number;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
 
   @IsNumber()
   @IsPositive()
@@ -83,12 +105,48 @@ export class CreateOrderDto {
 
   @IsString()
   @IsOptional()
+  shippingAddress?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SelectedItemDto)
-  selectedItems: SelectedItemDto[];
+  @IsOptional()
+  selectedItems?: SelectedItemDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderDetailDto)
+  @IsOptional()
+  orderDetails?: OrderDetailDto[];
+
+  // Voucher fields
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  voucherId?: number;
+
+  @IsString()
+  @IsOptional()
+  voucherCode?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  voucherDiscount?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  shippingFee?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  finalAmount?: number;
 }
 
 export class UpdateOrderDto {
