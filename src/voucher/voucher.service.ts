@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Raw } from 'typeorm';
 import { Voucher } from '../entities/voucher.entity';
 import { VoucherDiscountType } from '../entities/enums/voucher-discount-type.enum';
 import { OrderVoucher } from '../entities/order-voucher.entity';
@@ -39,6 +39,19 @@ export class VoucherService {
 
     findAll(): Promise<Voucher[]> {
         return this.voucherRepo.find();
+    }
+    async findAvailable() {
+    const now = new Date();
+        return this.voucherRepo.find({
+        where: [
+            {
+            isActive: true,
+            startDate: Raw((alias) => `${alias} IS NULL OR ${alias} <= :now`, { now }),
+            endDate: Raw((alias) => `${alias} IS NULL OR ${alias} >= :now`, { now }),
+            },
+        ],
+        order: { createdAt: 'DESC' },
+        });
     }
 
     async update(id: number, dto: UpdateVoucherDto): Promise<Voucher> {

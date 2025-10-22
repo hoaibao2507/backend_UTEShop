@@ -17,6 +17,10 @@ export class VoucherController {
     findAll() {
         return this.voucherService.findAll();
     }
+    @Get('available')
+    findAvailable() {
+    return this.voucherService.findAvailable();
+  }
 
     @Put(':id')
     update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateVoucherDto) {
