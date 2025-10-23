@@ -2,17 +2,124 @@ import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between } from 'typeorm';
 import { Product } from '../entities/product.entity';
-import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/product.dto';
+import { ProductImage } from '../entities/product-image.entity';
+import { CreateProductDto, UpdateProductDto, ProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
 import { CategoryService } from '../category/category.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class ProductService {
     constructor(
         @InjectRepository(Product)
         private productRepository: Repository<Product>,
+        @InjectRepository(ProductImage)
+        private productImageRepository: Repository<ProductImage>,
         @Inject(forwardRef(() => CategoryService))
         private categoryService: CategoryService,
+        private cloudinaryService: CloudinaryService,
     ) {}
+
+    async createWithImages(
+        createProductWithImagesDto: CreateProductWithImagesDto,
+        images: Express.Multer.File[]
+    ): Promise<Product> {
+        try {
+            // Validation
+            if (!images || images.length === 0) {
+                throw new BadRequestException('Vui lòng thêm ít nhất một ảnh sản phẩm');
+            }
+
+            if (images.length > 10) {
+                throw new BadRequestException('Chỉ được tải tối đa 10 ảnh');
+            }
+
+            const primaryImageIndex = createProductWithImagesDto.primaryImageIndex || 0;
+            if (primaryImageIndex < 0 || primaryImageIndex >= images.length) {
+                throw new BadRequestException('Ảnh chính không hợp lệ');
+            }
+
+            // Validate image types and sizes
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+
+            for (const image of images) {
+                if (!allowedTypes.includes(image.mimetype)) {
+                    throw new BadRequestException(`Định dạng ảnh không được hỗ trợ: ${image.mimetype}`);
+                }
+                if (image.size > maxSize) {
+                    throw new BadRequestException(`Kích thước ảnh quá lớn: ${image.originalname}`);
+                }
+            }
+
+            // Create product first
+            const product = this.productRepository.create({
+                categoryId: createProductWithImagesDto.categoryId,
+                productName: createProductWithImagesDto.productName,
+                description: createProductWithImagesDto.description,
+                price: createProductWithImagesDto.price,
+                discountPercent: createProductWithImagesDto.discountPercent || 0,
+                stockQuantity: createProductWithImagesDto.stockQuantity || 0,
+            });
+
+            const savedProduct = await this.productRepository.save(product);
+
+            // Upload images to Cloudinary
+            const uploadedImages: ProductImage[] = [];
+            for (let i = 0; i < images.length; i++) {
+                const image = images[i];
+                const isPrimary = i === primaryImageIndex;
+                
+                try {
+                    const uploadResult = await this.cloudinaryService.uploadFile(
+                        image,
+                        'products',
+                        'image'
+                    );
+
+                    const productImage = this.productImageRepository.create({
+                        productId: savedProduct.productId,
+                        imageUrl: uploadResult.secure_url,
+                        publicId: uploadResult.public_id,
+                        isPrimary: isPrimary,
+                        sortOrder: i,
+                    });
+
+                    const savedImage = await this.productImageRepository.save(productImage);
+                    uploadedImages.push(savedImage);
+                } catch (error) {
+                    // If upload fails, clean up already uploaded images
+                    for (const uploadedImage of uploadedImages) {
+                        try {
+                            await this.cloudinaryService.deleteFile(uploadedImage.publicId, 'image');
+                        } catch (deleteError) {
+                            console.error('Failed to delete image:', deleteError);
+                        }
+                    }
+                    throw new BadRequestException(`Lỗi upload ảnh: ${image.originalname}`);
+                }
+            }
+
+            // Update productCount for category
+            await this.categoryService.updateProductCount(savedProduct.categoryId);
+
+            // Return product with images
+            const productWithImages = await this.productRepository.findOne({
+                where: { productId: savedProduct.productId },
+                relations: ['images', 'category'],
+            });
+
+            if (!productWithImages) {
+                throw new NotFoundException('Product not found after creation');
+            }
+
+            return productWithImages;
+        } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to create product with images');
+        }
+    }
 
     async create(createProductDto: CreateProductDto): Promise<Product> {
         try {
@@ -106,6 +213,195 @@ export class ProductService {
             return updatedProduct;
         } catch (error) {
             throw new BadRequestException('Failed to update product');
+        }
+    }
+
+    async updateWithImages(
+        id: number,
+        updateProductWithImagesDto: UpdateProductWithImagesDto,
+        images: Express.Multer.File[]
+    ): Promise<Product> {
+        try {
+            const product = await this.findOne(id);
+            const oldCategoryId = product.categoryId;
+            
+            // Parse FormData fields
+            const hasNewImages = updateProductWithImagesDto.hasNewImages === 'true';
+            const existingImageIds = updateProductWithImagesDto.existingImageIds 
+                ? updateProductWithImagesDto.existingImageIds.split(',').map(Number).filter(id => !isNaN(id))
+                : [];
+            const remainingImageIds = updateProductWithImagesDto.remainingImageIds 
+                ? updateProductWithImagesDto.remainingImageIds.split(',').map(Number).filter(id => !isNaN(id))
+                : [];
+            const keepExistingImages = updateProductWithImagesDto.keepExistingImages === 'true';
+
+            // Find images to delete
+            const imagesToDelete = existingImageIds.filter(id => !remainingImageIds.includes(id));
+
+            // Validation for new images
+            if (hasNewImages && images && images.length > 0) {
+                if (images.length > 10) {
+                    throw new BadRequestException('Chỉ được tải tối đa 10 ảnh');
+                }
+
+                const primaryImageIndex = updateProductWithImagesDto.primaryImageIndex || 0;
+                if (primaryImageIndex < 0 || primaryImageIndex >= images.length) {
+                    throw new BadRequestException('Ảnh chính không hợp lệ');
+                }
+
+                // Validate image types and sizes
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+                const maxSize = 5 * 1024 * 1024; // 5MB
+
+                for (const image of images) {
+                    if (!allowedTypes.includes(image.mimetype)) {
+                        throw new BadRequestException(`Định dạng ảnh không được hỗ trợ: ${image.mimetype}`);
+                    }
+                    if (image.size > maxSize) {
+                        throw new BadRequestException(`Kích thước ảnh quá lớn: ${image.originalname}`);
+                    }
+                }
+            }
+
+            // Update product basic info
+            Object.assign(product, {
+                categoryId: updateProductWithImagesDto.categoryId || product.categoryId,
+                productName: updateProductWithImagesDto.productName || product.productName,
+                description: updateProductWithImagesDto.description || product.description,
+                price: updateProductWithImagesDto.price || product.price,
+                discountPercent: updateProductWithImagesDto.discountPercent !== undefined ? updateProductWithImagesDto.discountPercent : product.discountPercent,
+                stockQuantity: updateProductWithImagesDto.stockQuantity !== undefined ? updateProductWithImagesDto.stockQuantity : product.stockQuantity,
+            });
+
+            const updatedProduct = await this.productRepository.save(product);
+
+            // Delete images that are no longer needed
+            if (imagesToDelete.length > 0) {
+                for (const imageId of imagesToDelete) {
+                    try {
+                        const imageToDelete = await this.productImageRepository.findOne({
+                            where: { imageId: imageId, productId: id }
+                        });
+
+                        if (imageToDelete) {
+                            // Delete from Cloudinary
+                            await this.cloudinaryService.deleteFile(imageToDelete.publicId, 'image');
+                            
+                            // Delete from database
+                            await this.productImageRepository.delete({ imageId: imageId });
+                        }
+                    } catch (error) {
+                        console.error(`Failed to delete image ${imageId}:`, error);
+                    }
+                }
+            }
+
+            // Handle new images if provided
+            if (hasNewImages && images && images.length > 0) {
+                if (!keepExistingImages) {
+                    // Delete all existing images
+                    const existingImages = await this.productImageRepository.find({
+                        where: { productId: id }
+                    });
+
+                    for (const existingImage of existingImages) {
+                        try {
+                            await this.cloudinaryService.deleteFile(existingImage.publicId, 'image');
+                        } catch (error) {
+                            console.error('Failed to delete existing image:', error);
+                        }
+                    }
+
+                    await this.productImageRepository.delete({ productId: id });
+                }
+
+                // Upload new images
+                const uploadedImages: ProductImage[] = [];
+                const primaryImageIndex = updateProductWithImagesDto.primaryImageIndex || 0;
+                
+                for (let i = 0; i < images.length; i++) {
+                    const image = images[i];
+                    const isPrimary = i === primaryImageIndex;
+                    
+                    try {
+                        const uploadResult = await this.cloudinaryService.uploadFile(
+                            image,
+                            'products',
+                            'image'
+                        );
+
+                        const productImage = this.productImageRepository.create({
+                            productId: updatedProduct.productId,
+                            imageUrl: uploadResult.secure_url,
+                            publicId: uploadResult.public_id,
+                            isPrimary: isPrimary,
+                            sortOrder: keepExistingImages ? (await this.productImageRepository.count({ where: { productId: id } })) + i : i,
+                        });
+
+                        const savedImage = await this.productImageRepository.save(productImage);
+                        uploadedImages.push(savedImage);
+                    } catch (error) {
+                        // If upload fails, clean up already uploaded images
+                        for (const uploadedImage of uploadedImages) {
+                            try {
+                                await this.cloudinaryService.deleteFile(uploadedImage.publicId, 'image');
+                            } catch (deleteError) {
+                                console.error('Failed to delete image:', deleteError);
+                            }
+                        }
+                        throw new BadRequestException(`Lỗi upload ảnh: ${image.originalname}`);
+                    }
+                }
+            }
+
+            // Update primary image if specified
+            if (updateProductWithImagesDto.primaryImageIndex !== undefined) {
+                const primaryImageIndex = updateProductWithImagesDto.primaryImageIndex;
+                
+                // Reset all images to non-primary
+                await this.productImageRepository.update(
+                    { productId: id },
+                    { isPrimary: false }
+                );
+
+                // Get remaining images ordered by sortOrder
+                const remainingImages = await this.productImageRepository.find({
+                    where: { productId: id },
+                    order: { sortOrder: 'ASC' }
+                });
+
+                // Set the specified image as primary
+                if (remainingImages.length > 0 && primaryImageIndex < remainingImages.length) {
+                    const primaryImage = remainingImages[primaryImageIndex];
+                    await this.productImageRepository.update(
+                        { imageId: primaryImage.imageId },
+                        { isPrimary: true }
+                    );
+                }
+            }
+
+            // Update productCount for categories
+            await this.categoryService.updateProductCount(oldCategoryId);
+            if (updateProductWithImagesDto.categoryId && updateProductWithImagesDto.categoryId !== oldCategoryId) {
+                await this.categoryService.updateProductCount(updateProductWithImagesDto.categoryId);
+            }
+
+            // Return updated product with images
+            const productWithImages = await this.productRepository.findOne({
+                where: { productId: updatedProduct.productId },
+                relations: ['images', 'category'],
+            });
+
+            if (!productWithImages) {
+                throw new NotFoundException('Product not found after update');
+            }
+
+            return productWithImages;
+        } catch (error) {
+            if (error instanceof BadRequestException || error instanceof NotFoundException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to update product with images');
         }
     }
 

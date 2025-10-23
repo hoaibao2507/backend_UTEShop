@@ -12,8 +12,14 @@ export class ProductImage {
     @Column({ length: 500 })
     imageUrl: string;
 
+    @Column({ length: 200, nullable: true })
+    publicId: string;
+
     @Column({ default: false })
     isPrimary: boolean;
+
+    @Column({ default: 0 })
+    sortOrder: number;
 
     // Relations
     @ManyToOne(() => Product, product => product.images)
