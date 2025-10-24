@@ -28,6 +28,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationModule } from './notification/notification.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { ElasticsearchModule } from './elasticsearch/elasticsearch.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { join } from 'path';
     WebSocketModule,
     CloudinaryModule,
     NotificationModule,
+    ElasticsearchModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],
