@@ -8,11 +8,13 @@ import { Payment } from '../entities/payment.entity';
 import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method.entity';
 import { Order } from '../entities/order.entity';
 import { PaymentMethodModule } from '../payment-method/payment-method.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, PaymentMethodEntity, Order]),
     PaymentMethodModule,
+    NotificationModule,
   ],
   controllers: [PaymentController, PaymentWebhookController],
   providers: [PaymentService, PaymentGatewayService],

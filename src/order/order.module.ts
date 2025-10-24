@@ -18,6 +18,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { VoucherModule } from '../voucher/voucher.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
     imports: [
@@ -25,7 +26,8 @@ import { VoucherModule } from '../voucher/voucher.module';
         AuthModule,
         PaymentModule,
         WebSocketModule,
-        VoucherModule
+        VoucherModule,
+        NotificationModule
     ],
     controllers: [OrderController, OrderPaymentController],
     providers: [OrderService, OrderPaymentService],

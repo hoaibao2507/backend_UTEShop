@@ -202,3 +202,101 @@ export class TopDiscountProductsQueryDto {
     @IsPositive()
     limit?: number;
 }
+
+export class CreateProductWithImagesDto {
+    @IsNumber()
+    @IsPositive()
+    @Type(() => Number)
+    categoryId: number;
+
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(200)
+    productName: string;
+
+    @IsString()
+    @IsOptional()
+    description?: string;
+
+    @IsNumber()
+    @IsPositive()
+    @Type(() => Number)
+    price: number;
+
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    @Type(() => Number)
+    @IsOptional()
+    discountPercent?: number;
+
+    @IsNumber()
+    @Min(0)
+    @Type(() => Number)
+    @IsOptional()
+    stockQuantity?: number;
+
+    @IsNumber()
+    @Min(0)
+    @Type(() => Number)
+    @IsOptional()
+    primaryImageIndex?: number;
+}
+
+export class UpdateProductWithImagesDto {
+    @IsNumber()
+    @IsPositive()
+    @Type(() => Number)
+    @IsOptional()
+    categoryId?: number;
+
+    @IsString()
+    @IsOptional()
+    @MaxLength(200)
+    productName?: string;
+
+    @IsString()
+    @IsOptional()
+    description?: string;
+
+    @IsNumber()
+    @IsPositive()
+    @Type(() => Number)
+    @IsOptional()
+    price?: number;
+
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    @Type(() => Number)
+    @IsOptional()
+    discountPercent?: number;
+
+    @IsNumber()
+    @Min(0)
+    @Type(() => Number)
+    @IsOptional()
+    stockQuantity?: number;
+
+    @IsNumber()
+    @Min(0)
+    @Type(() => Number)
+    @IsOptional()
+    primaryImageIndex?: number;
+
+    @IsString()
+    @IsOptional()
+    hasNewImages?: string; // 'true' or 'false'
+
+    @IsString()
+    @IsOptional()
+    existingImageIds?: string; // Comma-separated IDs
+
+    @IsString()
+    @IsOptional()
+    remainingImageIds?: string; // Comma-separated IDs
+
+    @IsString()
+    @IsOptional()
+    keepExistingImages?: string; // 'true' or 'false'
+}

@@ -25,6 +25,7 @@ import { AdminModule } from './admin/admin.module';
 import { StaffModule } from './staff/staff.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { NotificationModule } from './notification/notification.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -71,6 +72,7 @@ import { join } from 'path';
     StaffModule,
     WebSocketModule,
     CloudinaryModule,
+    NotificationModule,
   ],
   controllers: [AppController, AuthController],
   providers: [AppService],

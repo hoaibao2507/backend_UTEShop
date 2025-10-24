@@ -227,4 +227,38 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       timestamp: new Date().toISOString(),
     });
   }
+
+  // Notification-specific event handlers
+  @SubscribeMessage('join_notification_room')
+  handleJoinNotificationRoom(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { userId: number },
+  ) {
+    if (data.userId && data.userId === client.userId) {
+      client.join(`user_${data.userId}`);
+      client.emit('joined_notification_room', { userId: data.userId });
+      this.logger.log(`🔔 Client ${client.id} joined notification room for user ${data.userId}`);
+    }
+  }
+
+  @SubscribeMessage('notification_read')
+  handleNotificationRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { notificationId: number },
+  ) {
+    if (data.notificationId && client.userId) {
+      // Emit to user's notification room
+      this.webSocketService.emitNotificationRead(client.userId, data.notificationId);
+      client.emit('notification_read_ack', { notificationId: data.notificationId });
+    }
+  }
+
+  @SubscribeMessage('get_notification_count')
+  handleGetNotificationCount(@ConnectedSocket() client: AuthenticatedSocket) {
+    // This would typically fetch from database, but for now just emit a placeholder
+    client.emit('notification_count', { 
+      unreadCount: 0, // This should be fetched from NotificationService
+      timestamp: new Date().toISOString(),
+    });
+  }
 }

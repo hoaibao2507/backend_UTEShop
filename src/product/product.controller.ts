@@ -1,13 +1,53 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ProductService } from './product.service';
-import { CreateProductDto, UpdateProductDto, ProductQueryDto, LatestProductsQueryDto, BestSellingProductsQueryDto, MostViewedProductsQueryDto, TopDiscountProductsQueryDto, HomepageProductQueryDto } from './dto/product.dto';
+import { CreateProductDto, UpdateProductDto, ProductQueryDto, LatestProductsQueryDto, BestSellingProductsQueryDto, MostViewedProductsQueryDto, TopDiscountProductsQueryDto, HomepageProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('products')
 @Controller('products')
 export class ProductController {
     constructor(private readonly productService: ProductService) {}
+
+    @Post('with-images')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FilesInterceptor('images', 10)) // Max 10 images
+    @ApiBearerAuth()
+    @ApiOperation({ 
+        summary: 'Tạo sản phẩm mới với ảnh', 
+        description: 'Tạo một sản phẩm mới kèm upload ảnh lên Cloudinary (yêu cầu xác thực)' 
+    })
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                productName: { type: 'string', example: 'Áo thun UTEShop' },
+                description: { type: 'string', example: 'Áo thun chất lượng cao' },
+                price: { type: 'number', example: 150000 },
+                discountPercent: { type: 'number', example: 10 },
+                stockQuantity: { type: 'number', example: 100 },
+                categoryId: { type: 'number', example: 1 },
+                images: {
+                    type: 'array',
+                    items: { type: 'string', format: 'binary' },
+                    description: 'Danh sách ảnh sản phẩm'
+                },
+                primaryImageIndex: { type: 'string', example: '0', description: 'Index của ảnh chính' }
+            },
+            required: ['productName', 'price', 'categoryId', 'images']
+        }
+    })
+    @ApiResponse({ status: 201, description: 'Sản phẩm được tạo thành công với ảnh' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+    async createWithImages(
+        @UploadedFiles() images: Express.Multer.File[],
+        @Body() createProductWithImagesDto: CreateProductWithImagesDto
+    ) {
+        return this.productService.createWithImages(createProductWithImagesDto, images);
+    }
 
     @Post()
     @UseGuards(JwtAuthGuard)
@@ -24,13 +64,6 @@ export class ProductController {
     @ApiResponse({ status: 200, description: 'Danh sách sản phẩm được trả về thành công' })
     async findAll(@Query() query: ProductQueryDto) {
         return this.productService.findAll(query);
-    }
-
-    @Get('featured')
-    @ApiOperation({ summary: 'Lấy sản phẩm nổi bật', description: 'Lấy danh sách các sản phẩm nổi bật (có giảm giá cao nhất)' })
-    @ApiResponse({ status: 200, description: 'Danh sách sản phẩm nổi bật được trả về thành công' })
-    async getFeaturedProducts(@Query('limit') limit: number = 10) {
-        return this.productService.getFeaturedProducts(limit);
     }
 
     @Get('latest')
@@ -241,12 +274,53 @@ export class ProductController {
     @Put(':id')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
-    @ApiOperation({ summary: 'Cập nhật sản phẩm', description: 'Cập nhật thông tin của một sản phẩm (yêu cầu xác thực)' })
+    @ApiOperation({ summary: 'Cập nhật sản phẩm', description: 'Cập nhật thông tin cơ bản của một sản phẩm (yêu cầu xác thực)' })
     @ApiResponse({ status: 200, description: 'Sản phẩm được cập nhật thành công' })
     @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
     @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
     async update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
         return this.productService.update(+id, updateProductDto);
+    }
+
+    @Put(':id/with-images')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FilesInterceptor('images', 10)) // Max 10 images
+    @ApiBearerAuth()
+    @ApiOperation({ 
+        summary: 'Cập nhật sản phẩm với ảnh', 
+        description: 'Cập nhật thông tin sản phẩm kèm upload ảnh mới lên Cloudinary (yêu cầu xác thực)' 
+    })
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                productName: { type: 'string', example: 'Áo thun UTEShop Updated' },
+                description: { type: 'string', example: 'Áo thun chất lượng cao đã cập nhật' },
+                price: { type: 'number', example: 180000 },
+                discountPercent: { type: 'number', example: 15 },
+                stockQuantity: { type: 'number', example: 150 },
+                categoryId: { type: 'number', example: 3 },
+                images: {
+                    type: 'array',
+                    items: { type: 'string', format: 'binary' },
+                    description: 'Danh sách ảnh mới (sẽ thay thế ảnh cũ)'
+                },
+                primaryImageIndex: { type: 'string', example: '0', description: 'Index của ảnh chính' },
+                keepExistingImages: { type: 'boolean', example: false, description: 'Giữ lại ảnh cũ hay không' }
+            }
+        }
+    })
+    @ApiResponse({ status: 200, description: 'Sản phẩm được cập nhật thành công với ảnh mới' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+    async updateWithImages(
+        @Param('id') id: string,
+        @UploadedFiles() images: Express.Multer.File[],
+        @Body() updateProductWithImagesDto: UpdateProductWithImagesDto
+    ) {
+        return this.productService.updateWithImages(+id, updateProductWithImagesDto, images);
     }
 
     @Put(':id/stock')

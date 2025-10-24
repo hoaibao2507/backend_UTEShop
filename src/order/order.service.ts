@@ -15,6 +15,7 @@ import { VoucherUsage } from '../entities/voucher-usage.entity';
 import { OrderVoucher } from '../entities/order-voucher.entity';
 import { WebSocketService } from '../websocket/websocket.service';
 import { VoucherService } from '../voucher/voucher.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class OrderService {
@@ -35,6 +36,7 @@ export class OrderService {
         private paymentMethodRepository: Repository<PaymentMethod>,
         private webSocketService: WebSocketService,
         private voucherService: VoucherService,
+        private notificationService: NotificationService,
         private dataSource: DataSource,
     ) {}
 
@@ -361,6 +363,18 @@ export class OrderService {
 
             await queryRunner.commitTransaction();
 
+            // Create initial notification for order creation
+            try {
+                await this.notificationService.createOrderStatusNotification(
+                    savedOrder.orderId,
+                    'Đơn hàng mới',
+                    savedOrder.userId
+                );
+            } catch (error) {
+                console.error('Failed to create order notification:', error);
+                // Don't throw error to avoid breaking order creation
+            }
+
             // Return order with relations
             return await this.findOne(savedOrder.orderId);
         } catch (error) {
@@ -470,6 +484,18 @@ export class OrderService {
         const oldStatus = order.status;
         order.status = status;
         const updatedOrder = await this.orderRepository.save(order);
+
+        // Create notification for order status update
+        try {
+            await this.notificationService.createOrderStatusNotification(
+                id,
+                status,
+                order.userId
+            );
+        } catch (error) {
+            console.error('Failed to create order status notification:', error);
+            // Don't throw error to avoid breaking order update
+        }
 
         // Broadcast WebSocket update to order-specific room
         this.webSocketService.broadcastToRoom(
@@ -696,6 +722,18 @@ export class OrderService {
       status: order.status,
       note,
     });
+
+    // 3. Create notification for order cancellation
+    try {
+      await this.notificationService.createOrderStatusNotification(
+        orderId,
+        order.status,
+        order.userId
+      );
+    } catch (error) {
+      console.error('Failed to create order cancellation notification:', error);
+      // Don't throw error to avoid breaking order cancellation
+    }
 
     return order;
   }
