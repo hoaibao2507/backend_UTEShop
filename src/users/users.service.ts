@@ -61,6 +61,22 @@ export class UsersService {
         return await this.usersRepository.save(user);
     }
 
+    async updateProfile(id: number, updateData: UpdateUserDto): Promise<User> {
+        const user = await this.usersRepository.findOne({ where: { id } });
+        if (!user) {
+            throw new Error('User không tồn tại');
+        }
+
+        // Cập nhật thông tin cơ bản
+        Object.assign(user, updateData);
+
+        const updatedUser = await this.usersRepository.save(user);
+        
+        // Trả về user data (không bao gồm password, otp, refreshToken)
+        const { password, otpCode, otpExpiry, refreshToken, ...userProfile } = updatedUser;
+        return userProfile as User;
+    }
+
     async verifyOtp(email: string, otp: string): Promise<{ message: string; user?: User }> {
         const user = await this.usersRepository.findOne({ where: { email } });
 

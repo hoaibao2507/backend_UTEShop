@@ -1,17 +1,20 @@
-import { Body, Controller, Get, Post, UseGuards, Param, ParseIntPipe, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseGuards, Param, ParseIntPipe, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './users.entity';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiConsumes, ApiProperty } from '@nestjs/swagger';
 import { CreateUserDto, UpdateUserDto } from 'src/dto/users.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-    constructor(private usersService: UsersService) {}
+    constructor(
+        private usersService: UsersService,
+        private cloudinaryService: CloudinaryService
+    ) {}
 
     @Get('getAll')
     @ApiOperation({ 
@@ -148,57 +151,112 @@ export class UsersController {
         return this.usersService.create(user);
     }
 
-    @UseGuards(AuthGuard('jwt'))
-    @Post('update/:id')
-    @ApiBearerAuth()
-    @ApiOperation({ 
-        summary: 'Cập nhật thông tin người dùng', 
-        description: 'Cập nhật thông tin của một người dùng theo ID (yêu cầu xác thực)' 
-    })
-    @ApiResponse({ status: 200, description: 'Thông tin người dùng được cập nhật thành công' })
-    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng' })
-    @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
-    async update(@Param('id', ParseIntPipe) id: number, @Body() user: UpdateUserDto): Promise<User> {
-        return this.usersService.update(id, user);
-    }
 
     @UseGuards(AuthGuard('jwt'))
-    @Post('upload-avatar')
+    @Put('update-profile')
     @ApiBearerAuth()
     @ApiConsumes('multipart/form-data')
     @ApiOperation({ 
-        summary: 'Upload avatar cho user đang đăng nhập', 
-        description: 'Upload ảnh avatar cho user hiện tại (yêu cầu xác thực JWT)' 
+        summary: 'Cập nhật profile user (thông tin + avatar)', 
+        description: 'Cập nhật thông tin và avatar của user đang đăng nhập trong một request duy nhất' 
+    })
+    @ApiProperty({
+        name: 'firstName',
+        description: 'Tên của người dùng',
+        required: false,
+        type: 'string',
+        example: 'Nguyễn'
+    })
+    @ApiProperty({
+        name: 'lastName',
+        description: 'Họ của người dùng',
+        required: false,
+        type: 'string',
+        example: 'Văn A'
+    })
+    @ApiProperty({
+        name: 'email',
+        description: 'Email của người dùng',
+        required: false,
+        type: 'string',
+        example: 'user@example.com'
+    })
+    @ApiProperty({
+        name: 'phone',
+        description: 'Số điện thoại',
+        required: false,
+        type: 'string',
+        example: '0123456789'
+    })
+    @ApiProperty({
+        name: 'address',
+        description: 'Địa chỉ chi tiết',
+        required: false,
+        type: 'string',
+        example: '123 Đường ABC, Quận 1'
+    })
+    @ApiProperty({
+        name: 'city',
+        description: 'Thành phố',
+        required: false,
+        type: 'string',
+        example: 'TP. Hồ Chí Minh'
+    })
+    @ApiProperty({
+        name: 'ward',
+        description: 'Phường/Xã',
+        required: false,
+        type: 'string',
+        example: 'Phường Bến Nghé'
+    })
+    @ApiProperty({
+        name: 'dateOfBirth',
+        description: 'Ngày sinh (YYYY-MM-DD)',
+        required: false,
+        type: 'string',
+        example: '1990-01-01'
+    })
+    @ApiProperty({
+        name: 'gender',
+        description: 'Giới tính (male, female, other)',
+        required: false,
+        type: 'string',
+        enum: ['male', 'female', 'other'],
+        example: 'male'
+    })
+    @ApiProperty({
+        name: 'avatar',
+        description: 'File ảnh avatar',
+        required: false,
+        type: 'string',
+        format: 'binary'
     })
     @ApiResponse({ 
         status: 200, 
-        description: 'Avatar được upload thành công',
+        description: 'Profile được cập nhật thành công',
         schema: {
             type: 'object',
             example: {
-                message: 'Avatar uploaded successfully',
-                avatarUrl: '/uploads/avatar_1234567890.jpg',
+                message: 'Profile updated successfully',
                 user: {
                     id: 1,
                     firstName: 'Nguyễn',
                     lastName: 'Văn A',
                     email: 'nguyenvana@gmail.com',
+                    phone: '0123456789',
+                    address: '123 Đường ABC',
+                    city: 'TP.HCM',
+                    gender: 'male',
+                    dateOfBirth: '1990-01-01',
                     avatar: '/uploads/avatar_1234567890.jpg'
                 }
             }
         }
     })
     @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    @ApiResponse({ status: 400, description: 'File không hợp lệ hoặc không có file' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
     @UseInterceptors(FileInterceptor('avatar', {
-        storage: diskStorage({
-            destination: './uploads',
-            filename: (req, file, cb) => {
-                const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
-                return cb(null, `avatar_${randomName}${extname(file.originalname)}`);
-            }
-        }),
+        storage: memoryStorage(), // Lưu trong memory thay vì disk
         fileFilter: (req, file, cb) => {
             if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
                 return cb(new BadRequestException('Chỉ chấp nhận file ảnh (jpg, jpeg, png, gif)'), false);
@@ -209,24 +267,29 @@ export class UsersController {
             fileSize: 5 * 1024 * 1024, // 5MB
         }
     }))
-    async uploadAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
+    async updateProfile(
+        @Request() req, 
+        @Body() updateUserDto: UpdateUserDto,
+        @UploadedFile() avatar?: Express.Multer.File
+    ) {
         try {
-            if (!file) {
-                throw new BadRequestException('Không có file được upload');
+            const userId = req.user.id;
+
+            // Upload avatar to Cloudinary if provided
+            if (avatar) {
+                const avatarUrl = await this.cloudinaryService.uploadImageFromBuffer(avatar.buffer, 'avatars');
+                updateUserDto.avatar = avatarUrl;
             }
 
-            const userId = req.user.id;
-            const avatarPath = `/uploads/${file.filename}`;
-            
-            const updatedUser = await this.usersService.updateAvatar(userId, avatarPath);
+            const updatedUser = await this.usersService.updateProfile(userId, updateUserDto);
             
             return {
-                message: 'Avatar uploaded successfully',
-                avatarUrl: avatarPath,
+                message: 'Profile updated successfully',
                 user: updatedUser
             };
         } catch (error) {
-            throw new BadRequestException(`Lỗi upload avatar: ${error.message}`);
+            throw new BadRequestException(`Lỗi cập nhật profile: ${error.message}`);
         }
     }
+
 }
