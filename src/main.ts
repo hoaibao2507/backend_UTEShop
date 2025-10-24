@@ -8,6 +8,9 @@ async function bootstrap() {
   // Cấu hình CORS
   app.enableCors({
     origin: ['http://localhost:3000', 'https://front-ecru-gamma.vercel.app'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Range', 'X-Total-Count'],
     credentials: true,
   });
 
