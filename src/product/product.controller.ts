@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ProductService } from './product.service';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto, LatestProductsQueryDto, BestSellingProductsQueryDto, MostViewedProductsQueryDto, TopDiscountProductsQueryDto, HomepageProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
@@ -66,11 +66,37 @@ export class ProductController {
         return this.productService.findAll(query);
     }
 
-    @Get('latest')
+    @Get('search')
+    @ApiOperation({ summary: 'Tìm kiếm sản phẩm', description: 'Tìm kiếm sản phẩm theo từ khóa và lọc theo danh mục' })
+    @ApiQuery({ name: 'q', required: true, description: 'Từ khóa tìm kiếm' })
+    @ApiQuery({ name: 'categoryId', required: false, description: 'Lọc theo danh mục' })
+    @ApiQuery({ name: 'page', required: false, description: 'Số trang (mặc định: 1)' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Số lượng sản phẩm mỗi trang (mặc định: 10)' })
+    @ApiResponse({ status: 200, description: 'Kết quả tìm kiếm' })
+    async searchProducts(
+        @Query('q') query: string,
+        @Query('categoryId') categoryId?: number,
+        @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+        @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+    ) {
+        return this.productService.searchProducts(query, categoryId, page, limit);
+    }
+
+    @Post('reindex')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
     @ApiOperation({ 
-        summary: 'Lấy sản phẩm mới nhất', 
-        description: 'Lấy danh sách sản phẩm mới nhất cho trang chủ (có thể tùy chỉnh số lượng)' 
+        summary: 'Đồng bộ lại chỉ mục tìm kiếm', 
+        description: 'Đồng bộ lại toàn bộ sản phẩm vào chỉ mục tìm kiếm (yêu cầu xác thực)' 
     })
+    @ApiResponse({ status: 200, description: 'Đồng bộ thành công' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    async reindexProducts() {
+        return this.productService.reindexAllProducts();
+    }
+
+    @Get('latest')
+    @ApiOperation({ summary: 'Lấy sản phẩm mới nhất', description: 'Lấy danh sách sản phẩm mới nhất cho trang chủ (có thể tùy chỉnh số lượng)' })
     @ApiQuery({ 
         name: 'limit', 
         required: false, 
@@ -82,8 +108,6 @@ export class ProductController {
     async getLatestProducts(@Query() query: LatestProductsQueryDto) {
         return this.productService.getLatestProducts(query.limit);
     }
-
-
 
     @Get('best-selling')
     @ApiOperation({ 

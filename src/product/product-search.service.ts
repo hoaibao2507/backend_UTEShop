@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ElasticsearchService } from '../elasticsearch/elasticsearch.service';
+import { ElasticService } from '../elasticsearch/elasticsearch.service';
 
 export interface ProductIndexDocument {
   id: number;
@@ -17,21 +17,21 @@ export class ProductSearchService {
   private readonly indexName = 'products';
   private readonly logger = new Logger(ProductSearchService.name);
 
-  constructor(private readonly elasticsearchService: ElasticsearchService) {}
+  constructor(private readonly elasticService: ElasticService) { }
 
   async initializeIndex() {
     const indexBody = {
       mappings: {
         properties: {
           id: { type: 'integer' },
-          name: { 
+          name: {
             type: 'text',
             analyzer: 'vi_analyzer',
             fields: {
               keyword: { type: 'keyword' }
             }
           },
-          description: { 
+          description: {
             type: 'text',
             analyzer: 'vi_analyzer'
           },
@@ -65,21 +65,21 @@ export class ProductSearchService {
       }
     };
 
-    return this.elasticsearchService.createIndex(this.indexName, indexBody);
+    return this.elasticService.createIndex(this.indexName, indexBody);
   }
 
   async indexProduct(product: ProductIndexDocument) {
-    return this.elasticsearchService.indexDocument(
+    return this.elasticService.indexDocument(
       this.indexName,
       product.id.toString(),
       product
     );
   }
 
-  async searchProducts(query: string, categoryId?: number, page = 1, limit = 10) {
+  async search(query: string, categoryId?: number, page = 1, limit = 10) {
     const from = (page - 1) * limit;
-    
-    const searchQuery: any = {
+
+    const searchBody: any = {
       query: {
         bool: {
           must: [
@@ -87,42 +87,37 @@ export class ProductSearchService {
               multi_match: {
                 query,
                 fields: ['name^3', 'description'],
-                fuzziness: 'AUTO'
-              }
-            }
-          ]
-        }
+                fuzziness: 'AUTO',
+              },
+            },
+          ],
+          filter: categoryId ? [{ term: { categoryId } }] : [],
+        },
       },
       sort: [
         { _score: { order: 'desc' } },
-        { createdAt: { order: 'desc' } }
-      ]
+        { createdAt: { order: 'desc' } },
+      ],
     };
 
-    if (categoryId) {
-      searchQuery.query.bool.filter = [
-        { term: { categoryId } }
-      ];
-    }
-
-    return this.elasticsearchService.search<ProductIndexDocument>(
+    return this.elasticService.search<ProductIndexDocument>(
       this.indexName,
-      searchQuery,
+      searchBody,
       limit,
-      from
+      from,
     );
   }
 
-  async updateProduct(product: Partial<ProductIndexDocument> & { id: number }) {
-    return this.elasticsearchService.updateDocument(
+  async update(product: Partial<ProductIndexDocument> & { id: number }) {
+    return this.elasticService.updateDocument(
       this.indexName,
       product.id.toString(),
       product
     );
   }
 
-  async deleteProduct(productId: number) {
-    return this.elasticsearchService.deleteDocument(
+  async delete(productId: number) {
+    return this.elasticService.deleteDocument(
       this.indexName,
       productId.toString()
     );

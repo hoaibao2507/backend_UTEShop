@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ElasticsearchService as NestElasticsearchService } from '@nestjs/elasticsearch';
+import { ElasticsearchService } from '@nestjs/elasticsearch';
 
 export interface IElasticsearchResponse<T = any> {
   success: boolean;
@@ -9,10 +9,10 @@ export interface IElasticsearchResponse<T = any> {
 }
 
 @Injectable()
-export class ElasticsearchService implements OnModuleInit {
-  private readonly logger = new Logger(ElasticsearchService.name);
+export class ElasticService implements OnModuleInit {
+  private readonly logger = new Logger(ElasticService.name);
 
-  constructor(private readonly elasticsearchService: NestElasticsearchService) {}
+  constructor(private readonly elasticsearchService: ElasticsearchService) {}
 
   async onModuleInit() {
     try {
