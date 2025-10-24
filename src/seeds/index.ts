@@ -13,6 +13,8 @@ import { CartItem } from '../entities/cart-item.entity';
 import { ProductView } from '../entities/product-view.entity';
 import * as bcrypt from 'bcrypt';
 import { OrderTracking } from 'src/entities';
+import { seedNotificationTemplates } from './notification-template.seed';
+import { seedUserNotificationPreferences } from './user-notification-preferences.seed';
 
 config();
 
@@ -94,6 +96,14 @@ async function seed() {
     // Seed product views
     await seedProductViews(products, users);
     console.log('Seeded product views');
+
+    // Seed notification templates
+    await seedNotificationTemplates(AppDataSource);
+    console.log('Seeded notification templates');
+
+    // Seed user notification preferences
+    await seedUserNotificationPreferences(AppDataSource);
+    console.log('Seeded user notification preferences');
 
     console.log('✅ Seeding completed successfully!');
   } catch (error) {

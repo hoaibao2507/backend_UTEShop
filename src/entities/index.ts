@@ -20,6 +20,9 @@ export { OrderVoucher } from './order-voucher.entity';
 export { Wishlist } from './wishlist.entity';
 export { Vendor, VendorStatus } from './vendor.entity';
 export { Admin, AdminRole } from './admin.entity';
+export { Notification, NotificationType } from './notification.entity';
+export { NotificationTemplate, NotificationTemplateType } from './notification-template.entity';
+export { UserNotificationPreferences } from './user-notification-preferences.entity';
 
 // Re-export User entity from users module for convenience
 export { User, Gender, UserRole } from '../users/users.entity';

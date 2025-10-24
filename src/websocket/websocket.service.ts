@@ -199,5 +199,72 @@ export class WebSocketService {
       }
     }
   }
+
+  // Notification-specific methods
+  emitNotificationCreated(userId: number, notification: any) {
+    this.broadcastToRoom(`user_${userId}`, 'notification_created', notification);
+    console.log(`🔔 Notification sent to user ${userId}:`, notification.title);
+  }
+
+  emitNotificationRead(userId: number, notificationId: number) {
+    this.broadcastToRoom(`user_${userId}`, 'notification_read', { notificationId });
+    console.log(`✅ Notification ${notificationId} marked as read for user ${userId}`);
+  }
+
+  emitOrderStatusUpdate(order: any) {
+    // Emit to order-specific room
+    this.broadcastToRoom(`order_${order.orderId}`, 'order_status_update', {
+      orderId: order.orderId,
+      status: order.status,
+      updatedAt: order.updatedAt,
+    });
+
+    // Emit to user-specific room
+    this.broadcastToRoom(`user_${order.userId}`, 'order_status_update', {
+      orderId: order.orderId,
+      status: order.status,
+      updatedAt: order.updatedAt,
+    });
+
+    console.log(`📦 Order ${order.orderId} status updated to ${order.status}`);
+  }
+
+  emitPaymentUpdate(orderId: number, userId: number, paymentStatus: string) {
+    this.broadcastToRoom(`user_${userId}`, 'payment_update', {
+      orderId,
+      paymentStatus,
+      timestamp: new Date().toISOString(),
+    });
+
+    this.broadcastToRoom(`order_${orderId}`, 'payment_update', {
+      orderId,
+      paymentStatus,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(`💳 Payment update for order ${orderId}: ${paymentStatus}`);
+  }
+
+  emitProductAlert(userId: number, productId: number, productName: string, alertType: string) {
+    this.broadcastToRoom(`user_${userId}`, 'product_alert', {
+      productId,
+      productName,
+      alertType,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(`⚠️ Product alert for user ${userId}: ${productName} - ${alertType}`);
+  }
+
+  emitPromotionNotification(userIds: number[], promotion: any) {
+    userIds.forEach(userId => {
+      this.broadcastToRoom(`user_${userId}`, 'promotion_notification', {
+        ...promotion,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    console.log(`🎉 Promotion notification sent to ${userIds.length} users`);
+  }
 }
 

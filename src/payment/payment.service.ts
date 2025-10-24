@@ -5,6 +5,7 @@ import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { PaymentMethod as PaymentMethodEntity } from '../entities/payment-method.entity';
 import { Order } from '../entities/order.entity';
 import { CreatePaymentDto, UpdatePaymentDto, PaymentStatusUpdateDto } from './dto/payment.dto';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class PaymentService {
@@ -15,6 +16,7 @@ export class PaymentService {
     private paymentMethodRepository: Repository<PaymentMethodEntity>,
     @InjectRepository(Order)
     private orderRepository: Repository<Order>,
+    private notificationService: NotificationService,
   ) {}
 
   async create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
@@ -113,7 +115,14 @@ export class PaymentService {
   }
 
   async updateStatus(id: number, statusUpdateDto: PaymentStatusUpdateDto): Promise<Payment> {
-    const payment = await this.findOne(id);
+    const payment = await this.paymentRepository.findOne({
+      where: { id },
+      relations: ['order', 'order.user'],
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Payment with ID ${id} not found`);
+    }
 
     // If updating status to SUCCESS, set paidAt
     if (statusUpdateDto.status === PaymentStatus.SUCCESS && !payment.paidAt) {
@@ -134,6 +143,19 @@ export class PaymentService {
 
     // Update order payment status
     await this.updateOrderPaymentStatus(payment.orderId, statusUpdateDto.status);
+
+    // Create notification for payment status update
+    try {
+      if (statusUpdateDto.status === PaymentStatus.SUCCESS) {
+        await this.notificationService.createPaymentSuccessNotification(
+          payment.orderId,
+          payment.order.userId
+        );
+      }
+    } catch (error) {
+      console.error('Failed to create payment notification:', error);
+      // Don't throw error to avoid breaking payment update
+    }
 
     return updatedPayment;
   }
