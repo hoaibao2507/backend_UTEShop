@@ -43,6 +43,12 @@ export class VoucherService {
         return this.voucherRepo.find();
     }
 
+    async findOne(id: number): Promise<Voucher> {
+        const voucher = await this.voucherRepo.findOne({ where: { id } });
+        if (!voucher) throw new NotFoundException('Voucher not found');
+        return voucher;
+    }
+
     async update(id: number, dto: UpdateVoucherDto): Promise<Voucher> {
         const voucher = await this.voucherRepo.findOne({ where: { id } });
         if (!voucher) throw new NotFoundException('Voucher not found');

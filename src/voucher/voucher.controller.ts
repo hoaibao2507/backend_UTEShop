@@ -18,6 +18,11 @@ export class VoucherController {
         return this.voucherService.findAll();
     }
 
+    @Get(':id')
+    findOne(@Param('id', ParseIntPipe) id: number) {
+        return this.voucherService.findOne(id);
+    }
+
     @Get('available')
     getAvailableVouchers(@Query('userId', ParseIntPipe) userId: number, @Query('orderAmount', ParseIntPipe) orderAmount: number) {
         return this.voucherService.getAvailableVouchers(userId, orderAmount);
