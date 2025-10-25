@@ -88,19 +88,6 @@ export class ProductController {
         return this.productService.searchProducts(query.trim(), categoryId, page, limit);
     }
 
-    @Post('reindex')
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth()
-    @ApiOperation({ 
-        summary: 'Đồng bộ lại chỉ mục tìm kiếm', 
-        description: 'Đồng bộ lại toàn bộ sản phẩm vào chỉ mục tìm kiếm (yêu cầu xác thực)' 
-    })
-    @ApiResponse({ status: 200, description: 'Đồng bộ thành công' })
-    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    async reindexProducts() {
-        return this.productService.reindexAllProducts();
-    }
-
     @Get('latest')
     @ApiOperation({ summary: 'Lấy sản phẩm mới nhất', description: 'Lấy danh sách sản phẩm mới nhất cho trang chủ (có thể tùy chỉnh số lượng)' })
     @ApiQuery({ 

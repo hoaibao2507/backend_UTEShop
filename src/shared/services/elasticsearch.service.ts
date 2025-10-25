@@ -1,23 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
+import { IElasticsearchResponse, IndexMapping, IndexSettings } from '../interfaces/elasticsearch.interface';
 
-export interface IElasticsearchResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-export interface IndexMapping {
-  properties: Record<string, any>;
-}
-
-export interface IndexSettings {
-  analysis?: {
-    analyzer?: Record<string, any>;
-    filter?: Record<string, any>;
-  };
-}
+// Re-export interfaces for backward compatibility
+export type { IElasticsearchResponse, IndexMapping, IndexSettings } from '../interfaces/elasticsearch.interface';
 
 @Injectable()
 export class SharedElasticsearchService implements OnModuleInit {

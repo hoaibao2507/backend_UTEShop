@@ -5,16 +5,7 @@ import { Category } from '../entities/category.entity';
 import { Product } from '../entities/product.entity';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 import { SharedElasticsearchService, IElasticsearchResponse } from '../shared/services/elasticsearch.service';
-
-// Interface for Category Elasticsearch document
-export interface CategoryIndexDocument {
-  id: number;
-  name: string;
-  description: string;
-  productCount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { CategoryIndexDocument } from '../shared/interfaces/elasticsearch.interface';
 
 @Injectable()
 export class CategoryService implements OnModuleInit {

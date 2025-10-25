@@ -46,19 +46,6 @@ export class CategoryController {
         return this.categoryService.searchCategories(query.trim(), page, limit);
     }
 
-    @Post('reindex')
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth()
-    @ApiOperation({ 
-        summary: 'Đồng bộ lại chỉ mục tìm kiếm', 
-        description: 'Đồng bộ lại toàn bộ danh mục vào chỉ mục tìm kiếm (yêu cầu xác thực)' 
-    })
-    @ApiResponse({ status: 200, description: 'Đồng bộ thành công' })
-    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    async reindexCategories() {
-        return this.categoryService.reindexAllCategories();
-    }
-
     @Get(':id')
     @ApiOperation({ summary: 'Lấy chi tiết danh mục', description: 'Lấy thông tin chi tiết của một danh mục theo ID' })
     @ApiResponse({ status: 200, description: 'Thông tin danh mục được trả về thành công' })

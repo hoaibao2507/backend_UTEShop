@@ -7,19 +7,7 @@ import { CreateProductDto, UpdateProductDto, ProductQueryDto, CreateProductWithI
 import { CategoryService } from '../category/category.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { SharedElasticsearchService, IElasticsearchResponse } from '../shared/services/elasticsearch.service';
-
-// Interface for Elasticsearch document
-export interface ProductIndexDocument {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  categoryId: number;
-  vendorId: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
+import { ProductIndexDocument } from '../shared/interfaces/elasticsearch.interface';
 
 @Injectable()
 export class ProductService implements OnModuleInit {
