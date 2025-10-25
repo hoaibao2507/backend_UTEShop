@@ -30,6 +30,55 @@ export class ProductService implements OnModuleInit {
     async onModuleInit() {
         // Elasticsearch connection is handled by SharedElasticsearchService
         this.logger.log('ProductService initialized');
+        
+        // Force reindex on startup to ensure data is up to date
+        setTimeout(async () => {
+            try {
+                console.log('🔄 Starting automatic reindex...');
+                const result = await this.reindexAllProducts();
+                console.log('✅ Automatic reindex completed:', result);
+            } catch (error) {
+                console.error('❌ Automatic reindex failed:', error);
+            }
+        }, 5000); // Wait 5 seconds after startup
+    }
+
+    /**
+     * Check Elasticsearch status and reindex if needed
+     */
+    async checkAndReindexIfNeeded(): Promise<void> {
+        try {
+            // Try a simple search to check if index has data
+            const testResult = await this.searchInElasticsearch<ProductIndexDocument>({
+                query: { match_all: {} },
+                size: 10  // Get more documents to check
+            });
+
+            console.log('🔍 Current Elasticsearch data count:', testResult?.data?.length || 0);
+            console.log('🔍 Elasticsearch search success:', testResult?.success);
+
+            if (!testResult.success || !testResult.data?.length) {
+                console.log('🔄 Elasticsearch index appears empty, reindexing...');
+                const reindexResult = await this.reindexAllProducts();
+                console.log('✅ Reindex result:', reindexResult);
+            } else {
+                console.log('✅ Elasticsearch index has data:', testResult.data.length, 'documents');
+                console.log('📋 Sample documents:', testResult.data.map(doc => ({
+                    id: doc._source?.id,
+                    name: doc._source?.name
+                })));
+            }
+        } catch (error) {
+            console.error('❌ Error checking Elasticsearch status:', error);
+            // Force reindex on error
+            try {
+                console.log('🔄 Error occurred, forcing reindex...');
+                const reindexResult = await this.reindexAllProducts();
+                console.log('✅ Force reindex result:', reindexResult);
+            } catch (reindexError) {
+                console.error('❌ Force reindex also failed:', reindexError);
+            }
+        }
     }
 
     private async initializeSearchIndex() {
@@ -1045,11 +1094,20 @@ export class ProductService implements OnModuleInit {
         }
 
         try {
+            // Check and reindex if needed before searching
+            await this.checkAndReindexIfNeeded();
+            
             const searchResult = await this.searchProductsInElasticsearch(query, categoryId, page, limit);
 
             // Check if Elasticsearch search failed or returned no results
             if (!searchResult || !searchResult.success || !searchResult.data?.length) {
                 console.warn('Elasticsearch search failed or returned no results, using fallback');
+                console.log('🔍 Search result details:', {
+                    searchResult: !!searchResult,
+                    success: searchResult?.success,
+                    dataLength: searchResult?.data?.length,
+                    error: searchResult?.error
+                });
                 return this.fallbackSearch(query, categoryId, page, limit);
             }
 
@@ -1057,6 +1115,9 @@ export class ProductService implements OnModuleInit {
             const productIds = searchResult.data
                 .map((hit: any) => hit._source?.id)
                 .filter((id: any) => id !== undefined && id !== null);
+
+            console.log('🔍 Extracted product IDs:', productIds);
+            console.log('🔍 Product IDs length:', productIds.length);
 
             if (productIds.length === 0) {
                 console.warn('No valid product IDs found in search results, using fallback');
@@ -1114,12 +1175,13 @@ export class ProductService implements OnModuleInit {
             query: {
                 bool: {
                     must: [
+                        // Only search in name field to avoid false matches in description
                         {
-                            multi_match: {
-                                query: query.trim(),
-                                fields: ['name^3', 'description'],
-                                fuzziness: 'AUTO',
-                                type: 'best_fields'
+                            match: {
+                                name: {
+                                    query: query.trim(),
+                                    fuzziness: 'AUTO',
+                                },
                             },
                         },
                     ],
@@ -1135,10 +1197,23 @@ export class ProductService implements OnModuleInit {
         };
 
         try {
+            console.log('🔍 Elasticsearch search query:', JSON.stringify(searchBody, null, 2));
+            
             const result = await this.searchInElasticsearch<ProductIndexDocument>(searchBody);
+
+            console.log('📊 Elasticsearch search result:', {
+                success: result?.success,
+                dataLength: result?.data?.length,
+                error: result?.error,
+                sampleData: result?.data?.slice(0, 2).map(hit => ({
+                    id: hit._source?.id,
+                    name: hit._source?.name
+                }))
+            });
 
             // Ensure result has proper structure
             if (!result) {
+                console.warn('❌ No response from Elasticsearch');
                 return {
                     success: false,
                     error: 'No response from Elasticsearch',
@@ -1150,6 +1225,7 @@ export class ProductService implements OnModuleInit {
             return result;
         } catch (error) {
             this.logger.error(`Search error: ${error.message}`);
+            console.error('❌ Elasticsearch search error:', error);
             return {
                 success: false,
                 error: error.message,
@@ -1172,22 +1248,36 @@ export class ProductService implements OnModuleInit {
         meta: { total: number; page: number; limit: number; totalPages: number };
     }> {
         console.warn('Using fallback search for query:', query);
+        console.log('🔍 Fallback search conditions:', { query, categoryId, page, limit });
         const skip = (page - 1) * limit;
         const where: any = {};
 
         try {
-            // Build search conditions
+            // Build search conditions - search in both productName and description
+            const searchConditions: any[] = [];
+            
             if (query && query.trim().length > 0) {
-                where.productName = Like(`%${query.trim()}%`);
+                const trimmedQuery = query.trim();
+                searchConditions.push(
+                    { productName: Like(`%${trimmedQuery}%`) },
+                    { description: Like(`%${trimmedQuery}%`) }
+                );
             }
 
             if (categoryId && categoryId > 0) {
-                where.categoryId = categoryId;
+                // If we have category filter, apply it to all search conditions
+                if (searchConditions.length > 0) {
+                    searchConditions.forEach(condition => {
+                        condition.categoryId = categoryId;
+                    });
+                } else {
+                    where.categoryId = categoryId;
+                }
             }
 
             // Execute query
             const [products, total] = await this.productRepository.findAndCount({
-                where,
+                where: searchConditions.length > 0 ? searchConditions : where,
                 relations: ['category', 'images'],
                 order: { createdAt: 'DESC' },
                 skip,
