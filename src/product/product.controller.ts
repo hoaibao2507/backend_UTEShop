@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, BadRequestException } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ProductService } from './product.service';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto, LatestProductsQueryDto, BestSellingProductsQueryDto, MostViewedProductsQueryDto, TopDiscountProductsQueryDto, HomepageProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
@@ -73,26 +73,19 @@ export class ProductController {
     @ApiQuery({ name: 'page', required: false, description: 'Số trang (mặc định: 1)' })
     @ApiQuery({ name: 'limit', required: false, description: 'Số lượng sản phẩm mỗi trang (mặc định: 10)' })
     @ApiResponse({ status: 200, description: 'Kết quả tìm kiếm' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
     async searchProducts(
         @Query('q') query: string,
         @Query('categoryId') categoryId?: number,
         @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
         @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
     ) {
-        return this.productService.searchProducts(query, categoryId, page, limit);
-    }
+        // Validate query parameter
+        if (!query || query.trim().length === 0) {
+            throw new BadRequestException('Query parameter "q" is required and cannot be empty');
+        }
 
-    @Post('reindex')
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth()
-    @ApiOperation({ 
-        summary: 'Đồng bộ lại chỉ mục tìm kiếm', 
-        description: 'Đồng bộ lại toàn bộ sản phẩm vào chỉ mục tìm kiếm (yêu cầu xác thực)' 
-    })
-    @ApiResponse({ status: 200, description: 'Đồng bộ thành công' })
-    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
-    async reindexProducts() {
-        return this.productService.reindexAllProducts();
+        return this.productService.searchProducts(query.trim(), categoryId, page, limit);
     }
 
     @Get('latest')

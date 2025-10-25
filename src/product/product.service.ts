@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between, In } from 'typeorm';
 import { Product } from '../entities/product.entity';
@@ -6,10 +6,14 @@ import { ProductImage } from '../entities/product-image.entity';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
 import { CategoryService } from '../category/category.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { ProductSearchService } from './product-search.service';
+import { SharedElasticsearchService, IElasticsearchResponse } from '../shared/services/elasticsearch.service';
+import { ProductIndexDocument } from '../shared/interfaces/elasticsearch.interface';
 
 @Injectable()
-export class ProductService {
+export class ProductService implements OnModuleInit {
+    private readonly logger = new Logger(ProductService.name);
+    private readonly indexName = 'products';
+
     constructor(
         @InjectRepository(Product)
         private productRepository: Repository<Product>,
@@ -18,18 +22,105 @@ export class ProductService {
         @Inject(forwardRef(() => CategoryService))
         private categoryService: CategoryService,
         private cloudinaryService: CloudinaryService,
-        private productSearchService: ProductSearchService,
+        private sharedElasticsearchService: SharedElasticsearchService,
     ) {
         this.initializeSearchIndex();
     }
 
+    async onModuleInit() {
+        // Elasticsearch connection is handled by SharedElasticsearchService
+        this.logger.log('ProductService initialized');
+    }
+
     private async initializeSearchIndex() {
         try {
-            await this.productSearchService.initializeIndex();
+            await this.initializeElasticsearchIndex();
             console.log('Elasticsearch index initialized');
         } catch (error) {
             console.error('Failed to initialize Elasticsearch index:', error);
         }
+    }
+
+    // ==================== ELASTICSEARCH METHODS ====================
+
+    /**
+     * Initialize Elasticsearch index with mappings and settings
+     */
+    async initializeElasticsearchIndex(): Promise<IElasticsearchResponse> {
+        const mappings = {
+            properties: {
+                id: { type: 'integer' },
+                name: {
+                    type: 'text',
+                    analyzer: 'vi_analyzer',
+                    fields: {
+                        keyword: { type: 'keyword' }
+                    }
+                },
+                description: {
+                    type: 'text',
+                    analyzer: 'vi_analyzer'
+                },
+                price: { type: 'float' },
+                categoryId: { type: 'integer' },
+                vendorId: { type: 'integer' },
+                createdAt: { type: 'date' },
+                updatedAt: { type: 'date' }
+            }
+        };
+
+        const settings = {
+            analysis: {
+                analyzer: {
+                    vi_analyzer: {
+                        type: 'custom',
+                        tokenizer: 'standard',
+                        filter: ['lowercase', 'asciifolding', 'vi_stop']
+                    }
+                },
+                filter: {
+                    vi_stop: {
+                        type: 'stop',
+                        stopwords: ['và', 'của', 'với', 'cho', 'từ', 'trong', 'để', 'là', 'có', 'được', 'này', 'đó', 'một', 'các', 'những', 'sản', 'phẩm', 'sản phẩm']
+                    }
+                }
+            }
+        };
+
+        return this.sharedElasticsearchService.createIndex(this.indexName, mappings, settings);
+    }
+
+    /**
+     * Index a product document in Elasticsearch
+     */
+    async indexProductInElasticsearch(product: ProductIndexDocument): Promise<IElasticsearchResponse> {
+        return this.sharedElasticsearchService.indexDocument(this.indexName, product.id.toString(), product);
+    }
+
+    /**
+     * Search products in Elasticsearch
+     */
+    async searchInElasticsearch<T = any>(
+        searchBody: Record<string, any>,
+    ): Promise<IElasticsearchResponse<Array<{ _id: string; _source: T }>>> {
+        return this.sharedElasticsearchService.search<T>(this.indexName, searchBody);
+    }
+
+    /**
+     * Update a product document in Elasticsearch
+     */
+    async updateProductInElasticsearch<T = any>(
+        id: string,
+        document: Partial<T>,
+    ): Promise<IElasticsearchResponse> {
+        return this.sharedElasticsearchService.updateDocument(this.indexName, id, document);
+    }
+
+    /**
+     * Delete a product document from Elasticsearch
+     */
+    async deleteProductFromElasticsearch(id: string): Promise<IElasticsearchResponse> {
+        return this.sharedElasticsearchService.deleteDocument(this.indexName, id);
     }
 
     async createWithImages(
@@ -905,7 +996,7 @@ export class ProductService {
                     updatedAt: product.updatedAt,
                 };
 
-                await this.productSearchService.indexProduct(productDocument);
+                await this.indexProductInElasticsearch(productDocument);
                 indexedCount++;
             }
 
@@ -940,19 +1031,45 @@ export class ProductService {
         data: any[];
         meta: { total: number; page: number; limit: number; totalPages: number };
     }> {
-        try {
-            const searchResult = await this.productSearchService.search(query, categoryId, page, limit);
+        // Validate input parameters
+        if (!query || query.trim().length === 0) {
+            throw new BadRequestException('Query string cannot be empty');
+        }
 
-            if (!searchResult.success || !searchResult.data?.length) {
+        if (page < 1) {
+            throw new BadRequestException('Page number must be greater than 0');
+        }
+
+        if (limit < 1 || limit > 100) {
+            throw new BadRequestException('Limit must be between 1 and 100');
+        }
+
+        try {
+            const searchResult = await this.searchProductsInElasticsearch(query, categoryId, page, limit);
+
+            // Check if Elasticsearch search failed or returned no results
+            if (!searchResult || !searchResult.success || !searchResult.data?.length) {
+                console.warn('Elasticsearch search failed or returned no results, using fallback');
                 return this.fallbackSearch(query, categoryId, page, limit);
             }
 
-            const productIds = searchResult.data.map((hit: any) => hit._source.id);
+            // Extract product IDs from search results
+            const productIds = searchResult.data
+                .map((hit: any) => hit._source?.id)
+                .filter((id: any) => id !== undefined && id !== null);
+
+            if (productIds.length === 0) {
+                console.warn('No valid product IDs found in search results, using fallback');
+                return this.fallbackSearch(query, categoryId, page, limit);
+            }
+
+            // Fetch products from database
             const products = await this.productRepository.find({
                 where: { productId: In(productIds) },
                 relations: ['category', 'images'],
             });
 
+            // Order products according to search result order
             const orderedProducts = productIds
                 .map(id => products.find(p => p.productId === id))
                 .filter(Boolean);
@@ -960,15 +1077,85 @@ export class ProductService {
             return {
                 data: orderedProducts,
                 meta: {
-                    total: searchResult.data.length || orderedProducts.length,
+                    total: orderedProducts.length,
                     page,
                     limit,
-                    totalPages: Math.ceil((searchResult.data.length || orderedProducts.length) / limit),
+                    totalPages: Math.ceil(orderedProducts.length / limit),
                 },
             };
         } catch (error) {
             console.error('Error searching products:', error);
             return this.fallbackSearch(query, categoryId, page, limit);
+        }
+    }
+
+    /**
+     * Search products in Elasticsearch with query building
+     */
+    async searchProductsInElasticsearch(
+        query: string,
+        categoryId?: number,
+        page = 1,
+        limit = 10
+    ): Promise<IElasticsearchResponse<Array<{ _id: string; _source: ProductIndexDocument }>>> {
+        // Validate query
+        if (!query || query.trim().length === 0) {
+            return {
+                success: false,
+                error: 'Query string cannot be empty',
+                message: 'Please provide a search query',
+                data: []
+            };
+        }
+
+        const from = (page - 1) * limit;
+
+        const searchBody: any = {
+            query: {
+                bool: {
+                    must: [
+                        {
+                            multi_match: {
+                                query: query.trim(),
+                                fields: ['name^3', 'description'],
+                                fuzziness: 'AUTO',
+                                type: 'best_fields'
+                            },
+                        },
+                    ],
+                    filter: categoryId ? [{ term: { categoryId } }] : [],
+                },
+            },
+            sort: [
+                { _score: { order: 'desc' } },
+                { createdAt: { order: 'desc' } },
+            ],
+            size: limit,
+            from: from
+        };
+
+        try {
+            const result = await this.searchInElasticsearch<ProductIndexDocument>(searchBody);
+
+            // Ensure result has proper structure
+            if (!result) {
+                return {
+                    success: false,
+                    error: 'No response from Elasticsearch',
+                    message: 'Search service unavailable',
+                    data: []
+                };
+            }
+
+            return result;
+        } catch (error) {
+            this.logger.error(`Search error: ${error.message}`);
+            return {
+                success: false,
+                error: error.message,
+                message: 'Search failed',
+                data: []
+            };
         }
     }
 
@@ -980,37 +1167,53 @@ export class ProductService {
         categoryId?: number,
         page: number = 1,
         limit: number = 10
-    ) {
-        console.warn('Fallback search for query:', query);
+    ): Promise<{
+        data: any[];
+        meta: { total: number; page: number; limit: number; totalPages: number };
+    }> {
+        console.warn('Using fallback search for query:', query);
         const skip = (page - 1) * limit;
         const where: any = {};
 
-        // Build search conditions
-        if (query) {
-            where.productName = Like(`%${query}%`);
-        }
-
-        if (categoryId) {
-            where.categoryId = categoryId;
-        }
-
-        // Execute query
-        const [products, total] = await this.productRepository.findAndCount({
-            where,
-            relations: ['category', 'images'],
-            order: { createdAt: 'DESC' },
-            skip,
-            take: limit
-        });
-
-        return {
-            data: products,
-            meta: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit)
+        try {
+            // Build search conditions
+            if (query && query.trim().length > 0) {
+                where.productName = Like(`%${query.trim()}%`);
             }
-        };
+
+            if (categoryId && categoryId > 0) {
+                where.categoryId = categoryId;
+            }
+
+            // Execute query
+            const [products, total] = await this.productRepository.findAndCount({
+                where,
+                relations: ['category', 'images'],
+                order: { createdAt: 'DESC' },
+                skip,
+                take: limit
+            });
+
+            return {
+                data: products,
+                meta: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            };
+        } catch (error) {
+            console.error('Fallback search error:', error);
+            return {
+                data: [],
+                meta: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0
+                }
+            };
+        }
     }
 }

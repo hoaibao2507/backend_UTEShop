@@ -1,5 +1,5 @@
 import { IsString, IsEmail, IsOptional, IsEnum, IsDateString, MinLength, MaxLength, Matches } from 'class-validator';
-import { Gender } from '../users/users.entity';
+import { Gender } from '../users.entity';
 
 export class CreateUserDto {
     @IsString()

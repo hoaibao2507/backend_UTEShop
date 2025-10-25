@@ -3,7 +3,7 @@ import { UsersService } from './users.service';
 import { User } from './users.entity';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiConsumes, ApiProperty } from '@nestjs/swagger';
-import { CreateUserDto, UpdateUserDto } from 'src/dto/users.dto';
+import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';

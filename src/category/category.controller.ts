@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ParseIntPipe, BadRequestException } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 import { JwtAuthGuard } from '../auth/jwt.strategy';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('categories')
 @Controller('categories')
@@ -24,6 +24,26 @@ export class CategoryController {
     @ApiResponse({ status: 200, description: 'Danh sách danh mục được trả về thành công' })
     async findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
         return this.categoryService.findAll(page, limit);
+    }
+
+    @Get('search')
+    @ApiOperation({ summary: 'Tìm kiếm danh mục', description: 'Tìm kiếm danh mục theo từ khóa' })
+    @ApiQuery({ name: 'q', required: true, description: 'Từ khóa tìm kiếm' })
+    @ApiQuery({ name: 'page', required: false, description: 'Số trang (mặc định: 1)' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Số lượng danh mục mỗi trang (mặc định: 10)' })
+    @ApiResponse({ status: 200, description: 'Kết quả tìm kiếm danh mục' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+    async searchCategories(
+        @Query('q') query: string,
+        @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+        @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+    ) {
+        // Validate query parameter
+        if (!query || query.trim().length === 0) {
+            throw new BadRequestException('Query parameter "q" is required and cannot be empty');
+        }
+
+        return this.categoryService.searchCategories(query.trim(), page, limit);
     }
 
     @Get(':id')
