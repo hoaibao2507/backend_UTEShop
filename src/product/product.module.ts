@@ -7,13 +7,15 @@ import { ProductImage } from '../entities/product-image.entity';
 import { AuthModule } from '../auth/auth.module';
 import { CategoryModule } from '../category/category.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { ProductSearchModule } from './product-search.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Product, ProductImage]), 
         AuthModule, 
         forwardRef(() => CategoryModule),
-        CloudinaryModule
+        CloudinaryModule,
+        ProductSearchModule
     ],
     controllers: [ProductController],
     providers: [ProductService],

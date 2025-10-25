@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, Between } from 'typeorm';
+import { Repository, Like, Between, In } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { ProductImage } from '../entities/product-image.entity';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
 import { CategoryService } from '../category/category.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { ProductSearchService } from './product-search.service';
 
 @Injectable()
 export class ProductService {
@@ -17,7 +18,19 @@ export class ProductService {
         @Inject(forwardRef(() => CategoryService))
         private categoryService: CategoryService,
         private cloudinaryService: CloudinaryService,
-    ) {}
+        private productSearchService: ProductSearchService,
+    ) {
+        this.initializeSearchIndex();
+    }
+
+    private async initializeSearchIndex() {
+        try {
+            await this.productSearchService.initializeIndex();
+            console.log('Elasticsearch index initialized');
+        } catch (error) {
+            console.error('Failed to initialize Elasticsearch index:', error);
+        }
+    }
 
     async createWithImages(
         createProductWithImagesDto: CreateProductWithImagesDto,
@@ -68,18 +81,15 @@ export class ProductService {
             for (let i = 0; i < images.length; i++) {
                 const image = images[i];
                 const isPrimary = i === primaryImageIndex;
-                
+
                 try {
-                    const uploadResult = await this.cloudinaryService.uploadFile(
-                        image,
-                        'products',
-                        'image'
-                    );
+                    const imageUrl = await this.cloudinaryService.uploadImage(image, 'products');
+                    const publicId = this.cloudinaryService.extractPublicId(imageUrl);
 
                     const productImage = this.productImageRepository.create({
                         productId: savedProduct.productId,
-                        imageUrl: uploadResult.secure_url,
-                        publicId: uploadResult.public_id,
+                        imageUrl: imageUrl,
+                        publicId: publicId,
                         isPrimary: isPrimary,
                         sortOrder: i,
                     });
@@ -90,7 +100,7 @@ export class ProductService {
                     // If upload fails, clean up already uploaded images
                     for (const uploadedImage of uploadedImages) {
                         try {
-                            await this.cloudinaryService.deleteFile(uploadedImage.publicId, 'image');
+                            await this.cloudinaryService.deleteImage(uploadedImage.publicId);
                         } catch (deleteError) {
                             console.error('Failed to delete image:', deleteError);
                         }
@@ -129,10 +139,10 @@ export class ProductService {
                 stockQuantity: createProductDto.stockQuantity || 0,
             });
             const savedProduct = await this.productRepository.save(product);
-            
+
             // Cập nhật productCount cho category
             await this.categoryService.updateProductCount(savedProduct.categoryId);
-            
+
             return savedProduct;
         } catch (error) {
             throw new BadRequestException('Failed to create product');
@@ -199,17 +209,17 @@ export class ProductService {
     async update(id: number, updateProductDto: UpdateProductDto): Promise<Product> {
         const product = await this.findOne(id);
         const oldCategoryId = product.categoryId;
-        
+
         try {
             Object.assign(product, updateProductDto);
             const updatedProduct = await this.productRepository.save(product);
-            
+
             // Cập nhật productCount cho category cũ và mới (nếu có thay đổi)
             await this.categoryService.updateProductCount(oldCategoryId);
             if (updateProductDto.categoryId && updateProductDto.categoryId !== oldCategoryId) {
                 await this.categoryService.updateProductCount(updateProductDto.categoryId);
             }
-            
+
             return updatedProduct;
         } catch (error) {
             throw new BadRequestException('Failed to update product');
@@ -224,13 +234,13 @@ export class ProductService {
         try {
             const product = await this.findOne(id);
             const oldCategoryId = product.categoryId;
-            
+
             // Parse FormData fields
             const hasNewImages = updateProductWithImagesDto.hasNewImages === 'true';
-            const existingImageIds = updateProductWithImagesDto.existingImageIds 
+            const existingImageIds = updateProductWithImagesDto.existingImageIds
                 ? updateProductWithImagesDto.existingImageIds.split(',').map(Number).filter(id => !isNaN(id))
                 : [];
-            const remainingImageIds = updateProductWithImagesDto.remainingImageIds 
+            const remainingImageIds = updateProductWithImagesDto.remainingImageIds
                 ? updateProductWithImagesDto.remainingImageIds.split(',').map(Number).filter(id => !isNaN(id))
                 : [];
             const keepExistingImages = updateProductWithImagesDto.keepExistingImages === 'true';
@@ -285,8 +295,8 @@ export class ProductService {
 
                         if (imageToDelete) {
                             // Delete from Cloudinary
-                            await this.cloudinaryService.deleteFile(imageToDelete.publicId, 'image');
-                            
+                            await this.cloudinaryService.deleteImage(imageToDelete.publicId);
+
                             // Delete from database
                             await this.productImageRepository.delete({ imageId: imageId });
                         }
@@ -306,7 +316,7 @@ export class ProductService {
 
                     for (const existingImage of existingImages) {
                         try {
-                            await this.cloudinaryService.deleteFile(existingImage.publicId, 'image');
+                            await this.cloudinaryService.deleteImage(existingImage.publicId);
                         } catch (error) {
                             console.error('Failed to delete existing image:', error);
                         }
@@ -318,22 +328,19 @@ export class ProductService {
                 // Upload new images
                 const uploadedImages: ProductImage[] = [];
                 const primaryImageIndex = updateProductWithImagesDto.primaryImageIndex || 0;
-                
+
                 for (let i = 0; i < images.length; i++) {
                     const image = images[i];
                     const isPrimary = i === primaryImageIndex;
-                    
+
                     try {
-                        const uploadResult = await this.cloudinaryService.uploadFile(
-                            image,
-                            'products',
-                            'image'
-                        );
+                        const imageUrl = await this.cloudinaryService.uploadImage(image, 'products');
+                        const publicId = this.cloudinaryService.extractPublicId(imageUrl);
 
                         const productImage = this.productImageRepository.create({
                             productId: updatedProduct.productId,
-                            imageUrl: uploadResult.secure_url,
-                            publicId: uploadResult.public_id,
+                            imageUrl: imageUrl,
+                            publicId: publicId,
                             isPrimary: isPrimary,
                             sortOrder: keepExistingImages ? (await this.productImageRepository.count({ where: { productId: id } })) + i : i,
                         });
@@ -344,7 +351,7 @@ export class ProductService {
                         // If upload fails, clean up already uploaded images
                         for (const uploadedImage of uploadedImages) {
                             try {
-                                await this.cloudinaryService.deleteFile(uploadedImage.publicId, 'image');
+                                await this.cloudinaryService.deleteImage(uploadedImage.publicId);
                             } catch (deleteError) {
                                 console.error('Failed to delete image:', deleteError);
                             }
@@ -357,7 +364,7 @@ export class ProductService {
             // Update primary image if specified
             if (updateProductWithImagesDto.primaryImageIndex !== undefined) {
                 const primaryImageIndex = updateProductWithImagesDto.primaryImageIndex;
-                
+
                 // Reset all images to non-primary
                 await this.productImageRepository.update(
                     { productId: id },
@@ -408,10 +415,10 @@ export class ProductService {
     async remove(id: number): Promise<void> {
         const product = await this.findOne(id);
         const categoryId = product.categoryId;
-        
+
         try {
             await this.productRepository.remove(product);
-            
+
             // Cập nhật productCount cho category sau khi xóa
             await this.categoryService.updateProductCount(categoryId);
         } catch (error) {
@@ -421,7 +428,7 @@ export class ProductService {
 
     async updateStock(id: number, quantity: number): Promise<Product> {
         const product = await this.findOne(id);
-        
+
         if (product.stockQuantity + quantity < 0) {
             throw new BadRequestException('Insufficient stock');
         }
@@ -461,7 +468,7 @@ export class ProductService {
             .orderBy('product.createdAt', 'DESC')
             .limit(limit)
             .getMany();
-        
+
         // Nếu có kết quả, load relations
         if (simpleResult.length > 0) {
             return await this.productRepository
@@ -472,7 +479,7 @@ export class ProductService {
                 .orderBy('product.createdAt', 'DESC')
                 .getMany();
         }
-        
+
         return simpleResult;
     }
 
@@ -496,12 +503,12 @@ export class ProductService {
             .limit(limit);
 
         const bestSellingResults = await bestSellingQuery.getRawMany();
-        
+
         // Nếu có ít hơn limit sản phẩm có đơn hàng, bổ sung bằng sản phẩm mới nhất
         if (bestSellingResults.length < limit) {
             const existingProductIds = bestSellingResults.map(result => result.productId);
             const remainingLimit = limit - bestSellingResults.length;
-            
+
             // Lấy thêm sản phẩm mới nhất không có trong danh sách bán chạy
             const additionalProducts = await this.productRepository
                 .createQueryBuilder('product')
@@ -512,7 +519,7 @@ export class ProductService {
                 .orderBy('product.createdAt', 'DESC')
                 .limit(remainingLimit)
                 .getMany();
-            
+
             // Load đầy đủ thông tin cho sản phẩm bán chạy
             const bestSellingProducts = existingProductIds.length > 0 ? await this.productRepository
                 .createQueryBuilder('product')
@@ -520,15 +527,15 @@ export class ProductService {
                 .leftJoinAndSelect('product.images', 'images')
                 .where('product.productId IN (:...ids)', { ids: existingProductIds })
                 .getMany() : [];
-            
+
             // Sắp xếp lại theo thứ tự bán chạy
-            const sortedBestSelling = existingProductIds.map(id => 
+            const sortedBestSelling = existingProductIds.map(id =>
                 bestSellingProducts.find(product => product.productId === id)
             ).filter((product): product is Product => product !== undefined);
-            
+
             return [...sortedBestSelling, ...additionalProducts];
         }
-        
+
         if (bestSellingResults.length === 0) {
             // Nếu không có sản phẩm nào có đơn hàng, trả về sản phẩm mới nhất
             return this.getLatestProducts(limit);
@@ -536,7 +543,7 @@ export class ProductService {
 
         // Lấy danh sách productId từ kết quả
         const productIds = bestSellingResults.map(result => result.productId);
-        
+
         // Load đầy đủ thông tin sản phẩm với relations
         const products = await this.productRepository
             .createQueryBuilder('product')
@@ -546,7 +553,7 @@ export class ProductService {
             .getMany();
 
         // Sắp xếp lại theo thứ tự bán chạy
-        const sortedProducts = productIds.map(id => 
+        const sortedProducts = productIds.map(id =>
             products.find(product => product.productId === id)
         ).filter((product): product is Product => product !== undefined);
 
@@ -563,7 +570,7 @@ export class ProductService {
             .where('product.stockQuantity > 0')
             .select([
                 'product.productId',
-                'product.categoryId', 
+                'product.categoryId',
                 'product.productName',
                 'product.description',
                 'product.price',
@@ -675,8 +682,8 @@ export class ProductService {
                 .createQueryBuilder('product')
                 .leftJoinAndSelect('product.category', 'category')
                 .leftJoinAndSelect('product.images', 'images')
-                .where('product.productId IN (:...productIds)', { 
-                    productIds: productIds.map(p => p.product_productId) 
+                .where('product.productId IN (:...productIds)', {
+                    productIds: productIds.map(p => p.product_productId)
                 })
                 .orderBy('product.discountPercent', 'DESC')
                 .addOrderBy('product.productId', 'ASC')
@@ -728,7 +735,7 @@ export class ProductService {
     async getSimilarProducts(productId: number, limit: number = 6): Promise<Product[]> {
         // Lấy thông tin sản phẩm hiện tại
         const currentProduct = await this.findOne(productId);
-        
+
         if (!currentProduct) {
             return [];
         }
@@ -778,7 +785,7 @@ export class ProductService {
             const remainingLimit = limit - similarProducts.length;
 
             const bestSellingProducts = await this.getBestSellingProducts(remainingLimit);
-            const filteredBestSelling = bestSellingProducts.filter(p => 
+            const filteredBestSelling = bestSellingProducts.filter(p =>
                 !existingIds.includes(p.productId) && p.productId !== productId
             );
 
@@ -799,7 +806,7 @@ export class ProductService {
         ratingDistribution: { [key: number]: number };
     }> {
         const product = await this.findOne(productId);
-        
+
         if (!product) {
             throw new NotFoundException(`Product with ID ${productId} not found`);
         }
@@ -812,14 +819,14 @@ export class ProductService {
                 .where('product.productId = :productId', { productId })
                 .select('COUNT(views.viewId)', 'count')
                 .getRawOne(),
-            
+
             this.productRepository
                 .createQueryBuilder('product')
                 .leftJoin('product.reviews', 'reviews')
                 .where('product.productId = :productId', { productId })
                 .select('COUNT(reviews.reviewId)', 'count')
                 .getRawOne(),
-            
+
             this.productRepository
                 .createQueryBuilder('product')
                 .leftJoin('product.orderDetails', 'orderDetails')
@@ -828,7 +835,7 @@ export class ProductService {
                 .andWhere('order.status = :status', { status: 'DELIVERED' })
                 .select('SUM(orderDetails.quantity)', 'count')
                 .getRawOne(),
-            
+
             this.productRepository
                 .createQueryBuilder('product')
                 .leftJoin('product.wishlists', 'wishlists')
@@ -869,6 +876,141 @@ export class ProductService {
             totalWishlists: parseInt(wishlistCount.count) || 0,
             averageRating,
             ratingDistribution
+        };
+    }
+
+    /**
+     * Reindex all products in Elasticsearch
+     * @returns Object containing success status and count of indexed products
+     */
+    async reindexAllProducts(): Promise<{ success: boolean; indexedCount: number; error?: string }> {
+        try {
+            // Get all products with their relations
+            const products = await this.productRepository.find({
+                relations: ['category', 'vendor'],
+            });
+
+            let indexedCount = 0;
+
+            // Reindex each product
+            for (const product of products) {
+                const productDocument: any = {
+                    id: product.productId,
+                    name: product.productName,
+                    description: product.description || '',
+                    price: product.price,
+                    categoryId: product.categoryId,
+                    vendorId: product.vendorId || null,
+                    createdAt: product.createdAt,
+                    updatedAt: product.updatedAt,
+                };
+
+                await this.productSearchService.indexProduct(productDocument);
+                indexedCount++;
+            }
+
+            return {
+                success: true,
+                indexedCount,
+            };
+        } catch (error) {
+            console.error('Error reindexing products:', error);
+            return {
+                success: false,
+                indexedCount: 0,
+                error: error.message || 'Failed to reindex products',
+            };
+        }
+    }
+
+    /**
+ * Search for products using Elasticsearch with fallback to database search
+ * @param query Search query string
+ * @param categoryId Optional category ID to filter by
+ * @param page Page number (1-based)
+ * @param limit Number of items per page
+ * @returns Paginated search results with product details
+ */
+    async searchProducts(
+        query: string,
+        categoryId?: number,
+        page = 1,
+        limit = 10,
+    ): Promise<{
+        data: any[];
+        meta: { total: number; page: number; limit: number; totalPages: number };
+    }> {
+        try {
+            const searchResult = await this.productSearchService.search(query, categoryId, page, limit);
+
+            if (!searchResult.success || !searchResult.data?.length) {
+                return this.fallbackSearch(query, categoryId, page, limit);
+            }
+
+            const productIds = searchResult.data.map((hit: any) => hit._source.id);
+            const products = await this.productRepository.find({
+                where: { productId: In(productIds) },
+                relations: ['category', 'images'],
+            });
+
+            const orderedProducts = productIds
+                .map(id => products.find(p => p.productId === id))
+                .filter(Boolean);
+
+            return {
+                data: orderedProducts,
+                meta: {
+                    total: searchResult.data.length || orderedProducts.length,
+                    page,
+                    limit,
+                    totalPages: Math.ceil((searchResult.data.length || orderedProducts.length) / limit),
+                },
+            };
+        } catch (error) {
+            console.error('Error searching products:', error);
+            return this.fallbackSearch(query, categoryId, page, limit);
+        }
+    }
+
+    /**
+     * Fallback search method using database when Elasticsearch is not available
+     */
+    private async fallbackSearch(
+        query: string,
+        categoryId?: number,
+        page: number = 1,
+        limit: number = 10
+    ) {
+        console.warn('Fallback search for query:', query);
+        const skip = (page - 1) * limit;
+        const where: any = {};
+
+        // Build search conditions
+        if (query) {
+            where.productName = Like(`%${query}%`);
+        }
+
+        if (categoryId) {
+            where.categoryId = categoryId;
+        }
+
+        // Execute query
+        const [products, total] = await this.productRepository.findAndCount({
+            where,
+            relations: ['category', 'images'],
+            order: { createdAt: 'DESC' },
+            skip,
+            take: limit
+        });
+
+        return {
+            data: products,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
         };
     }
 }
