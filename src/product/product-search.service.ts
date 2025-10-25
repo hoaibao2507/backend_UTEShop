@@ -48,17 +48,13 @@ export class ProductSearchService {
             vi_analyzer: {
               type: 'custom',
               tokenizer: 'standard',
-              filter: ['lowercase', 'asciifolding', 'vi_stop', 'vi_stemmer']
+              filter: ['lowercase', 'asciifolding', 'vi_stop']
             }
           },
           filter: {
             vi_stop: {
               type: 'stop',
-              stopwords: '_vietnamese_'
-            },
-            vi_stemmer: {
-              type: 'stemmer',
-              name: 'vietnamese'
+              stopwords: ['và', 'của', 'với', 'cho', 'từ', 'trong', 'để', 'là', 'có', 'được', 'này', 'đó', 'một', 'các', 'những', 'sản', 'phẩm', 'sản phẩm']
             }
           }
         }
@@ -77,6 +73,16 @@ export class ProductSearchService {
   }
 
   async search(query: string, categoryId?: number, page = 1, limit = 10) {
+    // Validate query
+    if (!query || query.trim().length === 0) {
+      return {
+        success: false,
+        error: 'Query string cannot be empty',
+        message: 'Please provide a search query',
+        data: []
+      };
+    }
+
     const from = (page - 1) * limit;
 
     const searchBody: any = {
@@ -85,9 +91,10 @@ export class ProductSearchService {
           must: [
             {
               multi_match: {
-                query,
+                query: query.trim(),
                 fields: ['name^3', 'description'],
                 fuzziness: 'AUTO',
+                type: 'best_fields'
               },
             },
           ],
@@ -98,14 +105,36 @@ export class ProductSearchService {
         { _score: { order: 'desc' } },
         { createdAt: { order: 'desc' } },
       ],
+      size: limit,
+      from: from
     };
 
-    return this.elasticService.search<ProductIndexDocument>(
-      this.indexName,
-      searchBody,
-      limit,
-      from,
-    );
+    try {
+      const result = await this.elasticService.search<ProductIndexDocument>(
+        this.indexName,
+        searchBody
+      );
+
+      // Ensure result has proper structure
+      if (!result) {
+        return {
+          success: false,
+          error: 'No response from Elasticsearch',
+          message: 'Search service unavailable',
+          data: []
+        };
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Search error: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Search failed',
+        data: []
+      };
+    }
   }
 
   async update(product: Partial<ProductIndexDocument> & { id: number }) {

@@ -58,7 +58,7 @@ export class ElasticService implements OnModuleInit {
       const result = await this.elasticsearchService.index({
         index,
         id,
-        document,
+        document: document as any,
         refresh: 'wait_for',
       });
 
@@ -76,16 +76,12 @@ export class ElasticService implements OnModuleInit {
   /** 🔹 Tìm kiếm document */
   async search<T = any>(
     index: string,
-    query: Record<string, any>,
-    size = 10,
-    from = 0,
+    searchBody: Record<string, any>,
   ): Promise<IElasticsearchResponse<Array<{ _id: string; _source: T }>>> {
     try {
       const result = await this.elasticsearchService.search({
         index,
-        query,
-        size,
-        from,
+        body: searchBody,
       });
 
       return {
@@ -109,7 +105,7 @@ export class ElasticService implements OnModuleInit {
       const result = await this.elasticsearchService.update({
         index,
         id,
-        doc: document,
+        doc: document as any,
         refresh: 'wait_for',
       });
 

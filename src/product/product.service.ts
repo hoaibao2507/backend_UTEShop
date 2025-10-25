@@ -940,19 +940,45 @@ export class ProductService {
         data: any[];
         meta: { total: number; page: number; limit: number; totalPages: number };
     }> {
+        // Validate input parameters
+        if (!query || query.trim().length === 0) {
+            throw new BadRequestException('Query string cannot be empty');
+        }
+
+        if (page < 1) {
+            throw new BadRequestException('Page number must be greater than 0');
+        }
+
+        if (limit < 1 || limit > 100) {
+            throw new BadRequestException('Limit must be between 1 and 100');
+        }
+
         try {
             const searchResult = await this.productSearchService.search(query, categoryId, page, limit);
 
-            if (!searchResult.success || !searchResult.data?.length) {
+            // Check if Elasticsearch search failed or returned no results
+            if (!searchResult || !searchResult.success || !searchResult.data?.length) {
+                console.warn('Elasticsearch search failed or returned no results, using fallback');
                 return this.fallbackSearch(query, categoryId, page, limit);
             }
 
-            const productIds = searchResult.data.map((hit: any) => hit._source.id);
+            // Extract product IDs from search results
+            const productIds = searchResult.data
+                .map((hit: any) => hit._source?.id)
+                .filter((id: any) => id !== undefined && id !== null);
+
+            if (productIds.length === 0) {
+                console.warn('No valid product IDs found in search results, using fallback');
+                return this.fallbackSearch(query, categoryId, page, limit);
+            }
+
+            // Fetch products from database
             const products = await this.productRepository.find({
                 where: { productId: In(productIds) },
                 relations: ['category', 'images'],
             });
 
+            // Order products according to search result order
             const orderedProducts = productIds
                 .map(id => products.find(p => p.productId === id))
                 .filter(Boolean);
@@ -960,10 +986,10 @@ export class ProductService {
             return {
                 data: orderedProducts,
                 meta: {
-                    total: searchResult.data.length || orderedProducts.length,
+                    total: orderedProducts.length,
                     page,
                     limit,
-                    totalPages: Math.ceil((searchResult.data.length || orderedProducts.length) / limit),
+                    totalPages: Math.ceil(orderedProducts.length / limit),
                 },
             };
         } catch (error) {
@@ -980,37 +1006,53 @@ export class ProductService {
         categoryId?: number,
         page: number = 1,
         limit: number = 10
-    ) {
-        console.warn('Fallback search for query:', query);
+    ): Promise<{
+        data: any[];
+        meta: { total: number; page: number; limit: number; totalPages: number };
+    }> {
+        console.warn('Using fallback search for query:', query);
         const skip = (page - 1) * limit;
         const where: any = {};
 
-        // Build search conditions
-        if (query) {
-            where.productName = Like(`%${query}%`);
-        }
-
-        if (categoryId) {
-            where.categoryId = categoryId;
-        }
-
-        // Execute query
-        const [products, total] = await this.productRepository.findAndCount({
-            where,
-            relations: ['category', 'images'],
-            order: { createdAt: 'DESC' },
-            skip,
-            take: limit
-        });
-
-        return {
-            data: products,
-            meta: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit)
+        try {
+            // Build search conditions
+            if (query && query.trim().length > 0) {
+                where.productName = Like(`%${query.trim()}%`);
             }
-        };
+
+            if (categoryId && categoryId > 0) {
+                where.categoryId = categoryId;
+            }
+
+            // Execute query
+            const [products, total] = await this.productRepository.findAndCount({
+                where,
+                relations: ['category', 'images'],
+                order: { createdAt: 'DESC' },
+                skip,
+                take: limit
+            });
+
+            return {
+                data: products,
+                meta: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            };
+        } catch (error) {
+            console.error('Fallback search error:', error);
+            return {
+                data: [],
+                meta: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0
+                }
+            };
+        }
     }
 }
