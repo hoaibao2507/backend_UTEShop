@@ -3,6 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between, In } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { ProductImage } from '../entities/product-image.entity';
+import { ProductView } from '../entities/product-view.entity';
+import { ProductReview } from '../entities/product-review.entity';
+import { CartItem } from '../entities/cart-item.entity';
+import { Wishlist } from '../entities/wishlist.entity';
+import { OrderDetail } from '../entities/order-detail.entity';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto, CreateProductWithImagesDto, UpdateProductWithImagesDto } from './dto/product.dto';
 import { CategoryService } from '../category/category.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -20,6 +25,16 @@ export class ProductService implements OnModuleInit {
         private productRepository: Repository<Product>,
         @InjectRepository(ProductImage)
         private productImageRepository: Repository<ProductImage>,
+        @InjectRepository(ProductView)
+        private productViewRepository: Repository<ProductView>,
+        @InjectRepository(ProductReview)
+        private productReviewRepository: Repository<ProductReview>,
+        @InjectRepository(CartItem)
+        private cartItemRepository: Repository<CartItem>,
+        @InjectRepository(Wishlist)
+        private wishlistRepository: Repository<Wishlist>,
+        @InjectRepository(OrderDetail)
+        private orderDetailRepository: Repository<OrderDetail>,
         @Inject(forwardRef(() => CategoryService))
         private categoryService: CategoryService,
         private cloudinaryService: CloudinaryService,
@@ -595,12 +610,55 @@ export class ProductService implements OnModuleInit {
         const categoryId = product.categoryId;
 
         try {
+            // 1. Delete all images from Cloudinary first
+            const images = await this.productImageRepository.find({
+                where: { productId: id }
+            });
+
+            // Delete images from Cloudinary
+            for (const image of images) {
+                try {
+                    await this.cloudinaryService.deleteImage(image.publicId);
+                } catch (error) {
+                    console.error(`Failed to delete image from Cloudinary: ${image.publicId}`, error);
+                    // Continue even if Cloudinary delete fails
+                }
+            }
+
+            // 2. Delete all ProductImage records
+            await this.productImageRepository.delete({ productId: id });
+
+            // 3. Delete ProductView records
+            await this.productViewRepository.delete({ productId: id });
+
+            // 4. Delete ProductReview records
+            await this.productReviewRepository.delete({ productId: id });
+
+            // 5. Delete CartItem records (if any)
+            await this.cartItemRepository.delete({ productId: id });
+
+            // 6. Delete Wishlist records (if any)
+            await this.wishlistRepository.delete({ productId: id });
+
+            // 7. Delete OrderDetail records (if any)
+            await this.orderDetailRepository.delete({ productId: id });
+
+            // 8. Finally delete the product
             await this.productRepository.remove(product);
 
-            // Cập nhật productCount cho category sau khi xóa
+            // 9. Cập nhật productCount cho category sau khi xóa
             await this.categoryService.updateProductCount(categoryId);
+
+            // 10. Delete from Elasticsearch
+            try {
+                await this.deleteProductFromElasticsearch(id.toString());
+            } catch (error) {
+                console.error('Failed to delete product from Elasticsearch:', error);
+                // Continue even if Elasticsearch delete fails
+            }
         } catch (error) {
-            throw new BadRequestException('Cannot delete product with existing orders or cart items');
+            console.error('Error deleting product:', error);
+            throw new BadRequestException('Cannot delete product: ' + error.message);
         }
     }
 
