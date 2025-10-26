@@ -280,12 +280,24 @@ export class ProductController {
         return this.productService.getProductsByCategory(+categoryId, limit);
     }
 
-    @Get(':id')
-    @ApiOperation({ summary: 'Lấy chi tiết sản phẩm', description: 'Lấy thông tin chi tiết của một sản phẩm theo ID' })
+    @Get('by-slug/:slug')
+    @ApiOperation({ summary: 'Lấy sản phẩm theo slug', description: 'Lấy thông tin chi tiết của một sản phẩm theo slug' })
     @ApiResponse({ status: 200, description: 'Thông tin sản phẩm được trả về thành công' })
     @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
-    async findOne(@Param('id') id: string) {
-        return this.productService.findOne(+id);
+    async findBySlug(@Param('slug') slug: string) {
+        return this.productService.findOne(slug);
+    }
+
+    @Get(':id')
+    @ApiOperation({ summary: 'Lấy chi tiết sản phẩm', description: 'Lấy thông tin chi tiết của một sản phẩm theo ID hoặc slug' })
+    @ApiResponse({ status: 200, description: 'Thông tin sản phẩm được trả về thành công' })
+    @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm' })
+    async findOne(@Param('id') idOrSlug: string) {
+        // Try to parse as number, if not parseable, treat as slug
+        const parsedId = parseInt(idOrSlug, 10);
+        const isNumeric = !isNaN(parsedId) && parsedId.toString() === idOrSlug;
+        
+        return this.productService.findOne(isNumeric ? parsedId : idOrSlug);
     }
 
     @Put(':id')

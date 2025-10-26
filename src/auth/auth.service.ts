@@ -261,7 +261,7 @@ export class AuthService {
             
             // Reload user to make sure we have latest data
             const latestUser = await this.usersRepository.findOne({ where: { id: user.id } });
-            const finalNeedPassword = !latestUser.password && latestUser.provider === 'google';
+            const finalNeedPassword = latestUser ? !latestUser.password && latestUser.provider === 'google' : needPassword;
 
             // Debug logging
             console.log('🔍 Google Login Debug:');
