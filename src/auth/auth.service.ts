@@ -214,16 +214,25 @@ export class AuthService {
             });
 
             if (user) {
+                // Debug existing user
+                console.log('🔍 Existing user status:');
+                console.log('- has googleId:', !!user.googleId);
+                console.log('- has provider:', !!user.provider);
+                console.log('- has password:', !!user.password);
+
                 // Update existing user with Google info if not already set
                 if (!user.googleId) {
+                    console.log('🔗 Linking Google account to existing user...');
                     user.googleId = googleUser.googleId;
                     user.provider = 'google';
                     if (!user.avatar && googleUser.avatar) {
                         user.avatar = googleUser.avatar;
                     }
                     await this.usersRepository.save(user);
+                    console.log('✅ Google account linked');
                 }
             } else {
+                console.log('🆕 Creating new Google user...');
                 // Validate required fields from Google
                 const firstName = googleUser.firstName || 'User';
                 const lastName = googleUser.lastName || 'Account';
@@ -241,6 +250,7 @@ export class AuthService {
                 });
 
                 user = await this.usersRepository.save(user);
+                console.log('✅ New Google user created');
             }
 
             // Generate JWT tokens
@@ -248,22 +258,34 @@ export class AuthService {
 
             // Check if user needs to set password
             const needPassword = !user.password && user.provider === 'google';
+            
+            // Reload user to make sure we have latest data
+            const latestUser = await this.usersRepository.findOne({ where: { id: user.id } });
+            const finalNeedPassword = !latestUser.password && latestUser.provider === 'google';
 
             // Debug logging
             console.log('🔍 Google Login Debug:');
             console.log('- User ID:', user.id);
             console.log('- Has password:', !!user.password);
             console.log('- Provider:', user.provider);
-            console.log('- Need password:', needPassword);
+            console.log('- Need password (before reload):', needPassword);
+            console.log('- Need password (after reload):', finalNeedPassword);
 
             // Return user data without sensitive information
             const { password, otpCode, otpExpiry, refreshToken, ...userData } = user;
 
-            return {
+            const response = {
                 ...tokens,
                 user: userData,
-                needPassword,
+                needPassword: finalNeedPassword,
             };
+
+            // Debug full response
+            console.log('📤 Google Login Response:');
+            console.log('- needPassword:', response.needPassword);
+            console.log('- has access_token:', !!response.access_token);
+
+            return response;
         } catch (error) {
             throw new Error('Google login failed: ' + error.message);
         }

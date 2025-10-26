@@ -1,9 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Increase request timeout to 60 minutes (3600000 ms)
+    bodyParser: true,
+  });
+
+  // Set server timeout to 60 minutes
+  app.use((req, res, next) => {
+    req.setTimeout(3600000); // 60 minutes in milliseconds
+    res.setTimeout(3600000); // 60 minutes in milliseconds
+    next();
+  });
 
   // Cấu hình CORS
   app.enableCors({
