@@ -283,4 +283,32 @@ export class AuthController {
             throw new InternalServerErrorException('Lỗi đặt lại mật khẩu: ' + error.message);
         }
     }
+
+    @Post('google-login')
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                googleToken: { type: 'string', example: 'google_id_token_here', description: 'Google ID Token từ frontend' },
+            },
+            required: ['googleToken']
+        }
+    })
+    async googleLogin(
+        @Body() body: any,
+    ): Promise<{ access_token: string; refresh_token: string; user: any }> {
+        try {
+            if (!body || !body.googleToken) {
+                throw new BadRequestException('Google token là bắt buộc');
+            }
+
+            return await this.authService.googleLogin(body.googleToken);
+        } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            console.error('Google login error:', error);
+            throw new InternalServerErrorException('Lỗi đăng nhập Google: ' + error.message);
+        }
+    }
 }

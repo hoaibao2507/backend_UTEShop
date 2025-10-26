@@ -6,15 +6,22 @@ import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { OAuth2Client } from 'google-auth-library';
 
 @Injectable()
 export class AuthService {
+    private googleClient: OAuth2Client;
+
     constructor(
         @InjectRepository(User)
         private usersRepository: Repository<User>,
         private jwtService: JwtService,
         private configService: ConfigService,
-    ) {}
+    ) {
+        this.googleClient = new OAuth2Client(
+            this.configService.get<string>('GOOGLE_CLIENT_ID')
+        );
+    }
 
     async register(firstName: string, lastName: string, email: string, password: string, phone?: string, address?: string, city?: string, gender?: string, dateOfBirth?: string): Promise<User> {
         // Kiểm tra email đã tồn tại chưa
@@ -165,6 +172,86 @@ export class AuthService {
         await this.usersRepository.save(user);
 
         return 'Mật khẩu đã được đặt lại thành công';
+    }
+
+    async verifyGoogleToken(token: string): Promise<any> {
+        try {
+            const ticket = await this.googleClient.verifyIdToken({
+                idToken: token,
+                audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+            });
+
+            const payload = ticket.getPayload();
+            if (!payload) {
+                throw new Error('Invalid Google token');
+            }
+
+            return {
+                googleId: payload.sub,
+                email: payload.email,
+                firstName: payload.given_name,
+                lastName: payload.family_name,
+                avatar: payload.picture,
+                emailVerified: payload.email_verified,
+            };
+        } catch (error) {
+            throw new Error('Google token verification failed: ' + error.message);
+        }
+    }
+
+    async googleLogin(googleToken: string): Promise<{ access_token: string; refresh_token: string; user: any }> {
+        try {
+            // Verify Google token
+            const googleUser = await this.verifyGoogleToken(googleToken);
+
+            if (!googleUser.emailVerified) {
+                throw new Error('Google email not verified');
+            }
+
+            // Check if user exists by email
+            let user = await this.usersRepository.findOne({ 
+                where: { email: googleUser.email } 
+            });
+
+            if (user) {
+                // Update existing user with Google info if not already set
+                if (!user.googleId) {
+                    user.googleId = googleUser.googleId;
+                    user.provider = 'google';
+                    if (!user.avatar && googleUser.avatar) {
+                        user.avatar = googleUser.avatar;
+                    }
+                    await this.usersRepository.save(user);
+                }
+            } else {
+                // Create new user
+                user = this.usersRepository.create({
+                    firstName: googleUser.firstName,
+                    lastName: googleUser.lastName,
+                    email: googleUser.email,
+                    googleId: googleUser.googleId,
+                    provider: 'google',
+                    avatar: googleUser.avatar,
+                    isVerified: true, // Google verified emails are considered verified
+                    password: undefined, // No password for Google users
+                });
+
+                user = await this.usersRepository.save(user);
+            }
+
+            // Generate JWT tokens
+            const tokens = await this.login(user);
+
+            // Return user data without sensitive information
+            const { password, otpCode, otpExpiry, refreshToken, ...userData } = user;
+
+            return {
+                ...tokens,
+                user: userData,
+            };
+        } catch (error) {
+            throw new Error('Google login failed: ' + error.message);
+        }
     }
 
 }
