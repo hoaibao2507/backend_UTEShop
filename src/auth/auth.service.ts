@@ -199,7 +199,7 @@ export class AuthService {
         }
     }
 
-    async googleLogin(googleToken: string): Promise<{ access_token: string; refresh_token: string; user: any }> {
+    async googleLogin(googleToken: string): Promise<{ access_token: string; refresh_token: string; user: any; needPassword: boolean }> {
         try {
             // Verify Google token
             const googleUser = await this.verifyGoogleToken(googleToken);
@@ -224,16 +224,20 @@ export class AuthService {
                     await this.usersRepository.save(user);
                 }
             } else {
+                // Validate required fields from Google
+                const firstName = googleUser.firstName || 'User';
+                const lastName = googleUser.lastName || 'Account';
+
                 // Create new user
                 user = this.usersRepository.create({
-                    firstName: googleUser.firstName,
-                    lastName: googleUser.lastName,
+                    firstName,
+                    lastName,
                     email: googleUser.email,
                     googleId: googleUser.googleId,
                     provider: 'google',
                     avatar: googleUser.avatar,
                     isVerified: true, // Google verified emails are considered verified
-                    password: undefined, // No password for Google users
+                    // No password needed for Google users
                 });
 
                 user = await this.usersRepository.save(user);
@@ -242,16 +246,60 @@ export class AuthService {
             // Generate JWT tokens
             const tokens = await this.login(user);
 
+            // Check if user needs to set password
+            const needPassword = !user.password && user.provider === 'google';
+
+            // Debug logging
+            console.log('🔍 Google Login Debug:');
+            console.log('- User ID:', user.id);
+            console.log('- Has password:', !!user.password);
+            console.log('- Provider:', user.provider);
+            console.log('- Need password:', needPassword);
+
             // Return user data without sensitive information
             const { password, otpCode, otpExpiry, refreshToken, ...userData } = user;
 
             return {
                 ...tokens,
                 user: userData,
+                needPassword,
             };
         } catch (error) {
             throw new Error('Google login failed: ' + error.message);
         }
+    }
+
+    async setPasswordForGoogleUser(userId: number, newPassword: string): Promise<string> {
+        // Find user by ID
+        const user = await this.usersRepository.findOne({ where: { id: userId } });
+        
+        if (!user) {
+            throw new Error('User không tồn tại');
+        }
+
+        // Check if user is a Google user
+        if (!user.provider || user.provider !== 'google') {
+            throw new Error('Chỉ có thể đặt mật khẩu cho tài khoản Google');
+        }
+
+        // Check if user already has a password
+        if (user.password) {
+            throw new Error('Tài khoản đã có mật khẩu. Vui lòng sử dụng chức năng đổi mật khẩu.');
+        }
+
+        // Validate password
+        if (!newPassword || newPassword.length < 6) {
+            throw new Error('Mật khẩu phải có ít nhất 6 ký tự');
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        // Update user password
+        user.password = hashedPassword;
+        await this.usersRepository.save(user);
+
+        return 'Mật khẩu đã được thiết lập thành công';
     }
 
 }
