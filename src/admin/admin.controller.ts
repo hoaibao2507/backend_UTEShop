@@ -131,5 +131,42 @@ export class AdminController {
     };
   }
 
+  @Get('statistics')
+  @UseGuards(AdminRoleGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.ADMIN)
+  @ApiOperation({ 
+    summary: 'Thống kê tổng quan hệ thống', 
+    description: 'Lấy thống kê tổng quan về hệ thống (Admin only): tổng người dùng, đơn hàng, danh mục, voucher, sản phẩm, lượt xem, lượt thích, đánh giá' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Thống kê tổng quan hệ thống',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        statistics: {
+          type: 'object',
+          properties: {
+            totalUsers: { type: 'number' },
+            totalOrders: { type: 'number' },
+            totalCategories: { type: 'number' },
+            totalVouchers: { type: 'number' },
+            totalProducts: { type: 'number' },
+            totalViews: { type: 'number' },
+            totalWishlists: { type: 'number' },
+            totalReviews: { type: 'number' }
+          }
+        }
+      }
+    }
+  })
+  async getStatistics() {
+    const statistics = await this.adminService.getStatistics();
+    return {
+      message: 'Lấy thống kê tổng quan hệ thống thành công',
+      statistics,
+    };
+  }
 
 }

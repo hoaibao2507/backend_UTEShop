@@ -6,15 +6,16 @@ import { StaffController } from './staff.controller';
 import { StaffAuthController } from './staff-auth.controller';
 import { StaffService } from './staff.service';
 import { StaffAuthService } from './staff-auth.service';
+import { StaffAuthGuard } from './guards/staff-auth.guard';
 import { User } from '../users/users.entity';
-import { Admin } from '../entities/admin.entity';
-import { Vendor } from '../entities/vendor.entity';
-import { AdminService } from '../admin/admin.service';
-import { VendorService } from '../vendor/vendor.service';
+import { AdminModule } from '../admin/admin.module';
+import { VendorModule } from '../vendor/vendor.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Admin, Vendor]),
+    TypeOrmModule.forFeature([User]),
+    AdminModule,
+    VendorModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -25,7 +26,7 @@ import { VendorService } from '../vendor/vendor.service';
     }),
   ],
   controllers: [StaffController, StaffAuthController],
-  providers: [StaffService, StaffAuthService, AdminService, VendorService],
+  providers: [StaffService, StaffAuthService, StaffAuthGuard],
   exports: [StaffService, StaffAuthService],
 })
 export class StaffModule {}

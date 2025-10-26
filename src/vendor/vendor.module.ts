@@ -6,14 +6,14 @@ import { VendorController } from './vendor.controller';
 import { VendorAuthController } from './vendor-auth.controller';
 import { VendorService } from './vendor.service';
 import { VendorAuthService } from './vendor-auth.service';
+import { VendorAuthGuard } from './guards/vendor-auth.guard';
 import { Vendor } from '../entities/vendor.entity';
-import { Admin } from '../entities/admin.entity';
-import { User } from '../users/users.entity';
-import { AdminService } from '../admin/admin.service';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vendor, Admin, User]),
+    TypeOrmModule.forFeature([Vendor]),
+    AdminModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -24,7 +24,7 @@ import { AdminService } from '../admin/admin.service';
     }),
   ],
   controllers: [VendorController, VendorAuthController],
-  providers: [VendorService, VendorAuthService, AdminService],
+  providers: [VendorService, VendorAuthService, VendorAuthGuard],
   exports: [VendorService, VendorAuthService],
 })
 export class VendorModule {}
