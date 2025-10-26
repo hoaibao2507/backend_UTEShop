@@ -3,6 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Admin, AdminRole } from '../entities/admin.entity';
 import { User, UserRole } from '../users/users.entity';
+import { Product } from '../entities/product.entity';
+import { Category } from '../entities/category.entity';
+import { Voucher } from '../entities/voucher.entity';
+import { Order } from '../entities/order.entity';
+import { ProductView } from '../entities/product-view.entity';
+import { Wishlist } from '../entities/wishlist.entity';
+import { ProductReview } from '../entities/product-review.entity';
 import { AdminUpdateDto, AdminChangePasswordDto } from './dto/admin.dto';
 import * as bcrypt from 'bcrypt';
 
@@ -13,6 +20,20 @@ export class AdminService {
     private adminRepository: Repository<Admin>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
+    @InjectRepository(Voucher)
+    private voucherRepository: Repository<Voucher>,
+    @InjectRepository(Order)
+    private orderRepository: Repository<Order>,
+    @InjectRepository(ProductView)
+    private productViewRepository: Repository<ProductView>,
+    @InjectRepository(Wishlist)
+    private wishlistRepository: Repository<Wishlist>,
+    @InjectRepository(ProductReview)
+    private productReviewRepository: Repository<ProductReview>,
   ) {}
 
 
@@ -216,6 +237,48 @@ export class AdminService {
     
     customer.isActive = !customer.isActive;
     return await this.userRepository.save(customer);
+  }
+
+  async getStatistics(): Promise<{
+    totalUsers: number;
+    totalOrders: number;
+    totalCategories: number;
+    totalVouchers: number;
+    totalProducts: number;
+    totalViews: number;
+    totalWishlists: number;
+    totalReviews: number;
+  }> {
+    const [
+      totalUsers,
+      totalOrders,
+      totalCategories,
+      totalVouchers,
+      totalProducts,
+      totalViews,
+      totalWishlists,
+      totalReviews
+    ] = await Promise.all([
+      this.userRepository.count(),
+      this.orderRepository.count(),
+      this.categoryRepository.count(),
+      this.voucherRepository.count(),
+      this.productRepository.count(),
+      this.productViewRepository.count(),
+      this.wishlistRepository.count(),
+      this.productReviewRepository.count(),
+    ]);
+
+    return {
+      totalUsers,
+      totalOrders,
+      totalCategories,
+      totalVouchers,
+      totalProducts,
+      totalViews,
+      totalWishlists,
+      totalReviews,
+    };
   }
 
 }
