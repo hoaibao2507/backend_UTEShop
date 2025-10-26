@@ -22,6 +22,9 @@ export class Product {
     @Column({ length: 200 })
     productName: string;
 
+    @Column({ length: 255, unique: true })
+    slug: string;
+
     @Column({ type: 'text', nullable: true })
     description: string;
 

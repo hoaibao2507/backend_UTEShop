@@ -9,6 +9,26 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { SharedElasticsearchService, IElasticsearchResponse } from '../shared/services/elasticsearch.service';
 import { ProductIndexDocument } from '../shared/interfaces/elasticsearch.interface';
 
+/**
+ * Generate slug from product name
+ */
+function generateSlug(productName: string): string {
+    return productName
+        .toLowerCase()
+        .trim()
+        .replace(/[áàảãạăắằẳẵặâấầẩẫậ]/g, 'a')
+        .replace(/[éèẻẽẹêếềểễệ]/g, 'e')
+        .replace(/[íìỉĩị]/g, 'i')
+        .replace(/[óòỏõọôốồổỗộơớờởỡợ]/g, 'o')
+        .replace(/[úùủũụưứừửữự]/g, 'u')
+        .replace(/[ýỳỷỹỵ]/g, 'y')
+        .replace(/[đ]/g, 'd')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
 @Injectable()
 export class ProductService implements OnModuleInit {
     private readonly logger = new Logger(ProductService.name);
@@ -25,6 +45,31 @@ export class ProductService implements OnModuleInit {
         private sharedElasticsearchService: SharedElasticsearchService,
     ) {
         this.initializeSearchIndex();
+    }
+
+    /**
+     * Generate unique slug from product name
+     */
+    private async generateUniqueSlug(productName: string): Promise<string> {
+        let baseSlug = generateSlug(productName);
+        let slug = baseSlug;
+        let counter = 1;
+
+        // Check if slug exists, if yes, append number
+        while (true) {
+            const existingProduct = await this.productRepository.findOne({
+                where: { slug },
+            });
+
+            if (!existingProduct) {
+                break;
+            }
+
+            slug = `${baseSlug}-${counter}`;
+            counter++;
+        }
+
+        return slug;
     }
 
     async onModuleInit() {
@@ -204,10 +249,14 @@ export class ProductService implements OnModuleInit {
                 }
             }
 
+            // Generate unique slug
+            const slug = await this.generateUniqueSlug(createProductWithImagesDto.productName);
+
             // Create product first
             const product = this.productRepository.create({
                 categoryId: createProductWithImagesDto.categoryId,
                 productName: createProductWithImagesDto.productName,
+                slug: slug,
                 description: createProductWithImagesDto.description,
                 price: createProductWithImagesDto.price,
                 discountPercent: createProductWithImagesDto.discountPercent || 0,
@@ -273,8 +322,12 @@ export class ProductService implements OnModuleInit {
 
     async create(createProductDto: CreateProductDto): Promise<Product> {
         try {
+            // Generate unique slug
+            const slug = await this.generateUniqueSlug(createProductDto.productName);
+
             const product = this.productRepository.create({
                 ...createProductDto,
+                slug: slug,
                 discountPercent: createProductDto.discountPercent || 0,
                 stockQuantity: createProductDto.stockQuantity || 0,
             });
@@ -333,14 +386,17 @@ export class ProductService implements OnModuleInit {
         };
     }
 
-    async findOne(id: number): Promise<Product> {
+    async findOne(idOrSlug: number | string): Promise<Product> {
+        // Check if it's a number (ID) or string (slug)
+        const isSlug = typeof idOrSlug === 'string';
+        
         const product = await this.productRepository.findOne({
-            where: { productId: id },
+            where: isSlug ? { slug: idOrSlug } : { productId: idOrSlug },
             relations: ['category', 'images', 'reviews', 'reviews.user'],
         });
 
         if (!product) {
-            throw new NotFoundException(`Product with ID ${id} not found`);
+            throw new NotFoundException(`Product with ${isSlug ? 'slug' : 'ID'} "${idOrSlug}" not found`);
         }
 
         return product;
