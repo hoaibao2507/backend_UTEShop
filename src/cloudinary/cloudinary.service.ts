@@ -14,14 +14,33 @@ export class CloudinaryService {
 
   async uploadImage(file: Express.Multer.File, folder: string = 'uteshop'): Promise<string> {
     try {
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: folder,
-        resource_type: 'auto',
-        quality: 'auto',
-        fetch_format: 'auto',
-      });
-      
-      return result.secure_url;
+      // Check if file is from disk storage (has path) or memory storage (has buffer)
+      if (file.path) {
+        // File uploaded to disk
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: folder,
+          resource_type: 'auto',
+          quality: 'auto',
+          fetch_format: 'auto',
+        });
+        
+        return result.secure_url;
+      } else if (file.buffer) {
+        // File uploaded to memory, upload using buffer
+        const result = await cloudinary.uploader.upload(
+          `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          {
+            folder: folder,
+            resource_type: 'auto',
+            quality: 'auto',
+            fetch_format: 'auto',
+          }
+        );
+        
+        return result.secure_url;
+      } else {
+        throw new Error('File has neither path nor buffer');
+      }
     } catch (error) {
       throw new Error(`Failed to upload image to Cloudinary: ${error.message}`);
     }

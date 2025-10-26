@@ -8,26 +8,7 @@ import { CategoryService } from '../category/category.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { SharedElasticsearchService, IElasticsearchResponse } from '../shared/services/elasticsearch.service';
 import { ProductIndexDocument } from '../shared/interfaces/elasticsearch.interface';
-
-/**
- * Generate slug from product name
- */
-function generateSlug(productName: string): string {
-    return productName
-        .toLowerCase()
-        .trim()
-        .replace(/[áàảãạăắằẳẵặâấầẩẫậ]/g, 'a')
-        .replace(/[éèẻẽẹêếềểễệ]/g, 'e')
-        .replace(/[íìỉĩị]/g, 'i')
-        .replace(/[óòỏõọôốồổỗộơớờởỡợ]/g, 'o')
-        .replace(/[úùủũụưứừửữự]/g, 'u')
-        .replace(/[ýỳỷỹỵ]/g, 'y')
-        .replace(/[đ]/g, 'd')
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-}
+import { generateSlug, generateUniqueSlug } from '../shared/utils/slug.util';
 
 @Injectable()
 export class ProductService implements OnModuleInit {
@@ -48,28 +29,29 @@ export class ProductService implements OnModuleInit {
     }
 
     /**
-     * Generate unique slug from product name
+     * Generate unique slug from product name with random suffix
+     * Retries if slug exists until unique one is found
      */
-    private async generateUniqueSlug(productName: string): Promise<string> {
-        let baseSlug = generateSlug(productName);
-        let slug = baseSlug;
-        let counter = 1;
+    private async generateUniqueSlugForProduct(productName: string): Promise<string> {
+        let slug = generateUniqueSlug(productName);
+        const maxRetries = 10;
 
-        // Check if slug exists, if yes, append number
-        while (true) {
+        // Check if slug exists, if yes, generate new random suffix
+        for (let i = 0; i < maxRetries; i++) {
             const existingProduct = await this.productRepository.findOne({
                 where: { slug },
             });
 
             if (!existingProduct) {
-                break;
+                return slug;
             }
 
-            slug = `${baseSlug}-${counter}`;
-            counter++;
+            // Generate new slug with random suffix
+            slug = generateUniqueSlug(productName);
         }
 
-        return slug;
+        // If still not unique after retries, append timestamp
+        return `${generateSlug(productName)}-${Date.now()}`;
     }
 
     async onModuleInit() {
@@ -250,7 +232,7 @@ export class ProductService implements OnModuleInit {
             }
 
             // Generate unique slug
-            const slug = await this.generateUniqueSlug(createProductWithImagesDto.productName);
+            const slug = await this.generateUniqueSlugForProduct(createProductWithImagesDto.productName);
 
             // Create product first
             const product = this.productRepository.create({
@@ -323,7 +305,7 @@ export class ProductService implements OnModuleInit {
     async create(createProductDto: CreateProductDto): Promise<Product> {
         try {
             // Generate unique slug
-            const slug = await this.generateUniqueSlug(createProductDto.productName);
+            const slug = await this.generateUniqueSlugForProduct(createProductDto.productName);
 
             const product = this.productRepository.create({
                 ...createProductDto,

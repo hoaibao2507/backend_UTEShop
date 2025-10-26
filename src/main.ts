@@ -18,7 +18,7 @@ async function bootstrap() {
 
   // Cấu hình CORS
   app.enableCors({
-    origin: ['http://localhost:3000', 'https://front-ecru-gamma.vercel.app'],
+    origin: ['http://localhost:3000', 'https://front-ecru-gamma.vercel.app', 'https://giftshop-api.loca.lt', 'http://localhost:3001'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
     exposedHeaders: ['Content-Range', 'X-Total-Count'],
