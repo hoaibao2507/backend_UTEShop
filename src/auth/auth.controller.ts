@@ -320,7 +320,15 @@ export class AuthController {
                 throw new BadRequestException('Google token là bắt buộc');
             }
 
-            return await this.authService.googleLogin(body.googleToken);
+            const response = await this.authService.googleLogin(body.googleToken);
+            
+            // Log final response being sent to frontend
+            console.log('✅ Sending response to frontend:');
+            console.log('- needPassword:', response.needPassword);
+            console.log('- user.email:', response.user.email);
+            console.log('- user.provider:', response.user.provider);
+            
+            return response;
         } catch (error) {
             if (error instanceof BadRequestException) {
                 throw error;
