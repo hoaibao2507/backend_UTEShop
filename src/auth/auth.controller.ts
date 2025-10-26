@@ -1,8 +1,9 @@
-import { Controller, Post, Body, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, UnauthorizedException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { User } from 'src/users/users.entity';
 import { AuthService } from './auth.service';
 import { UsersService } from 'src/users/users.service';
-import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -281,6 +282,104 @@ export class AuthController {
             }
             console.error('Reset password error:', error);
             throw new InternalServerErrorException('Lỗi đặt lại mật khẩu: ' + error.message);
+        }
+    }
+
+    @Post('google-login')
+    @ApiOperation({ 
+        summary: 'Đăng nhập bằng Google',
+        description: 'Đăng nhập hoặc tạo tài khoản mới bằng Google OAuth. Trả về needPassword: true nếu user chưa có mật khẩu.'
+    })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Đăng nhập thành công',
+        schema: {
+            type: 'object',
+            properties: {
+                access_token: { type: 'string', example: 'eyJhbGci...' },
+                refresh_token: { type: 'string', example: 'eyJhbGci...' },
+                user: { type: 'object' },
+                needPassword: { type: 'boolean', example: true }
+            }
+        }
+    })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                googleToken: { type: 'string', example: 'google_id_token_here', description: 'Google ID Token từ frontend' },
+            },
+            required: ['googleToken']
+        }
+    })
+    async googleLogin(
+        @Body() body: any,
+    ): Promise<{ access_token: string; refresh_token: string; user: any; needPassword: boolean }> {
+        try {
+            if (!body || !body.googleToken) {
+                throw new BadRequestException('Google token là bắt buộc');
+            }
+
+            return await this.authService.googleLogin(body.googleToken);
+        } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            console.error('Google login error:', error);
+            throw new InternalServerErrorException('Lỗi đăng nhập Google: ' + error.message);
+        }
+    }
+
+    @Post('set-password')
+    @UseGuards(AuthGuard('jwt'))
+    @ApiBearerAuth()
+    @ApiOperation({ 
+        summary: 'Đặt mật khẩu cho tài khoản Google', 
+        description: 'API này cho phép người dùng đăng nhập lần đầu bằng Google thiết lập mật khẩu cho tài khoản của mình. Yêu cầu JWT token hợp lệ.'
+    })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                password: { type: 'string', example: 'newpassword123', description: 'Mật khẩu mới (tối thiểu 6 ký tự)' },
+                confirmPassword: { type: 'string', example: 'newpassword123', description: 'Xác nhận mật khẩu' },
+            },
+            required: ['password', 'confirmPassword']
+        }
+    })
+    @ApiResponse({ status: 200, description: 'Đặt mật khẩu thành công' })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+    @ApiResponse({ status: 401, description: 'Không có quyền truy cập' })
+    async setPassword(
+        @Request() req,
+        @Body() body: any,
+    ): Promise<{ message: string }> {
+        try {
+            if (!body || !body.password || !body.confirmPassword) {
+                throw new BadRequestException('Password và confirmPassword là bắt buộc');
+            }
+
+            if (body.password !== body.confirmPassword) {
+                throw new BadRequestException('Mật khẩu và xác nhận mật khẩu không khớp');
+            }
+
+            if (body.password.length < 6) {
+                throw new BadRequestException('Mật khẩu phải có ít nhất 6 ký tự');
+            }
+
+            const userId = req.user.id;
+            if (!userId) {
+                throw new UnauthorizedException('Không thể xác thực người dùng');
+            }
+
+            const message = await this.authService.setPasswordForGoogleUser(userId, body.password);
+            return { message };
+        } catch (error) {
+            if (error instanceof BadRequestException || error instanceof UnauthorizedException) {
+                throw error;
+            }
+            console.error('Set password error:', error);
+            throw new InternalServerErrorException('Lỗi đặt mật khẩu: ' + error.message);
         }
     }
 }

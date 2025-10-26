@@ -63,6 +63,12 @@ export class User {
     @Column({ nullable: true })
     avatar: string;
 
+    @Column({ nullable: true })
+    googleId: string;
+
+    @Column({ nullable: true })
+    provider: string;
+
     @Column({
         type: 'enum',
         enum: UserRole,
